@@ -114,3 +114,31 @@ model FulfillmentEvent {
 
   @@index([orderId, occurredAt])
 }
+
+// Only admins for now; add values here when scoped roles are needed.
+enum Role {
+  admin
+}
+
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  name         String
+  passwordHash String
+  role         Role      @default(admin)
+  sessions     Session[]
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  // SHA-256 of the cookie token, so a database leak can't be replayed as a login.
+  tokenHash String   @unique
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}

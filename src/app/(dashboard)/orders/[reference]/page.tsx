@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { ArrowLeft, CircleDollarSign, PackageCheck } from "lucide-react";
 import { StatusBadge } from "@/components/status-badge";
 import { formatCurrency, formatDate, getOrderByReference, issueLabels } from "@/lib/dashboard";
+import { requireUser } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -13,6 +14,7 @@ export async function generateMetadata({ params }: { params: Promise<{ reference
 }
 
 export default async function OrderDetailPage({ params }: { params: Promise<{ reference: string }> }) {
+  await requireUser();
   const { reference } = await params;
   const order = await getOrderByReference(decodeURIComponent(reference));
   if (!order) notFound();

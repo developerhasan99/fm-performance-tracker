@@ -2,6 +2,7 @@ import Link from "next/link";
 import { AlertCircle, ArrowDownRight, ArrowRight, Boxes, CalendarDays, Clock3, PackageCheck } from "lucide-react";
 import { OrdersTable } from "@/components/orders-table";
 import { getDashboardSnapshot } from "@/lib/dashboard";
+import { requireUser } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -46,6 +47,7 @@ function MetricCard({ title, value, footnote, icon: Icon }: { title: string; val
 }
 
 export default async function OverviewPage() {
+  await requireUser();
   const snapshot = await getDashboardSnapshot();
   const maxStage = Math.max(1, ...snapshot.stages.map((stage) => stage.count));
   const maxIssue = Math.max(1, ...snapshot.issueBreakdown.map((issue) => issue.count));

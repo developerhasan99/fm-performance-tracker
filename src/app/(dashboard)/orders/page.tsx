@@ -3,6 +3,7 @@ import type { FulfillmentStatus } from "@prisma/client";
 import { Search } from "lucide-react";
 import { OrdersTable } from "@/components/orders-table";
 import { getOrders } from "@/lib/dashboard";
+import { requireUser } from "@/lib/auth";
 
 export const metadata: Metadata = { title: "Orders" };
 export const dynamic = "force-dynamic";
@@ -10,6 +11,7 @@ export const dynamic = "force-dynamic";
 const statuses: FulfillmentStatus[] = ["placed", "processing", "in_transit", "delivered", "delayed", "cancelled"];
 
 export default async function OrdersPage({ searchParams }: { searchParams: Promise<{ q?: string; status?: string }> }) {
+  await requireUser();
   const params = await searchParams;
   const query = params.q?.trim() ?? "";
   const status = statuses.find((candidate) => candidate === params.status);

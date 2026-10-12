@@ -18,7 +18,8 @@ Sample mode is an explicit UI-preview setting. It does not query PostgreSQL or i
 3. Install dependencies with `npm install`.
 4. Apply the checked-in migrations and generate the Prisma client with `npm run db:migrate`.
 5. Load clearly labelled example records into an empty database with `npm run db:seed`. The command refuses to run if the database already contains orders.
-6. Start the app with `npm run dev`.
+6. Create the first admin with `npm run admin -- you@example.com` (prompts for name and password).
+7. Start the app with `npm run dev` and sign in.
 
 Seed rows are demonstration data, not imported operational data, and remain marked as sample data in the dashboard. Shopify order number is the shared key. SLA due timestamps are stored on each order because the brief calls out targets that may vary by market or service; agree the actual policy before connecting production sources.
 
@@ -29,4 +30,12 @@ Seed rows are demonstration data, not imported operational data, and remain mark
 - Searchable and status-filterable orders with shipped quantities and an auditable order timeline.
 - PostgreSQL models for orders, line items, support contacts and source-attributed fulfilment events.
 
-Live imports, SLA policy configuration, authentication and support-system integrations are intentionally outside this first slice.
+## Users and sign-in
+
+Every page requires sign-in. All users are admins for now; any admin can add users, set new passwords and delete users on the Users page. Sessions last 7 days and are stored in the `Session` table, so deleting a user or resetting their password signs them out.
+
+**Lost admin password:** run `npm run admin -- you@example.com` with `DATABASE_URL` pointing at the database (for Railway, use the Postgres `DATABASE_PUBLIC_URL`, or `railway run npm run admin -- you@example.com`). It resets the password and signs out that user's sessions, or creates the admin if the email doesn't exist.
+
+Sample mode (`DASHBOARD_DEMO_MODE="true"`) has no database and skips sign-in; it only ever shows sample data.
+
+Live imports, SLA policy configuration and support-system integrations are intentionally outside this first slice.

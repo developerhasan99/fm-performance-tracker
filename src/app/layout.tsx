@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import { AppShell } from "@/components/app-shell";
 
 export const metadata: Metadata = {
   title: {
@@ -18,7 +17,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-        <AppShell isDemoMode={process.env.DASHBOARD_DEMO_MODE === "true"}>{children}</AppShell>
+        {children}
       </body>
     </html>
   );
