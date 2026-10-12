@@ -38,4 +38,13 @@ Every page requires sign-in. All users are admins for now; any admin can add use
 
 Sample mode (`DASHBOARD_DEMO_MODE="true"`) has no database and skips sign-in; it only ever shows sample data.
 
-Live imports, SLA policy configuration and support-system integrations are intentionally outside this first slice.
+## Shopify order import
+
+Admins add stores on the **Stores** page (Shopify domain, optional custom domain, and SLA days). Each store needs its own app made in the [Shopify Dev Dashboard](https://dev.shopify.com/dashboard) with **custom distribution**, scope `read_orders`, redirect URL `APP_URL/api/shopify/callback`, and protected customer data (name, email) enabled. Paste the app's Client ID and secret, click **Connect**, approve in Shopify.
+
+- New and updated orders are fetched every `SHOPIFY_SYNC_HOURS` (default 3) by an in-process timer, plus a **Sync now** button. The first sync covers the last 60 days (Shopify's limit for `read_orders`).
+- An order is identified by store + Shopify order ID (a database unique key), so re-syncing updates it instead of duplicating it.
+- App secrets and tokens are encrypted with `ENCRYPTION_KEY`. Use the same key on every machine that shares the database.
+- Shopify has no factory data, so imported orders start with factory "Unassigned"; pick/pack timestamps stay empty. Carrier collection is taken from the fulfillment time and delivery from Shopify's delivered status.
+
+Support-system integrations are intentionally outside this slice.

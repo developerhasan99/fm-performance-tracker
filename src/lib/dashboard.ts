@@ -5,6 +5,7 @@ import { getPrisma } from "@/lib/prisma";
 const orderInclude = {
   items: true,
   contacts: true,
+  store: { select: { name: true, shopDomain: true, customDomain: true } },
   events: { orderBy: { occurredAt: "asc" as const } },
 } satisfies Prisma.OrderInclude;
 
@@ -198,6 +199,7 @@ export async function getOrders(search: string, status?: FulfillmentStatus) {
         { customerEmail: { contains: query, mode: "insensitive" } },
         { factoryName: { contains: query, mode: "insensitive" } },
         { carrier: { contains: query, mode: "insensitive" } },
+        { store: { name: { contains: query, mode: "insensitive" } } },
       ] } : {}),
     },
     include: orderInclude,
@@ -205,10 +207,10 @@ export async function getOrders(search: string, status?: FulfillmentStatus) {
   });
 }
 
-export async function getOrderByReference(reference: string) {
-  if (isDemoMode()) return demoOrders.find((order) => order.shopifyOrderId === reference) ?? null;
+export async function getOrderById(id: string) {
+  if (isDemoMode()) return demoOrders.find((order) => order.id === id) ?? null;
   return getPrisma().order.findUnique({
-    where: { shopifyOrderId: reference },
+    where: { id },
     include: orderInclude,
   });
 }

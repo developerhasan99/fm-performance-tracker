@@ -44,7 +44,12 @@ enum EventSource {
 
 model Order {
   id                 String             @id @default(cuid())
-  shopifyOrderId     String             @unique
+  // Shopify order name, e.g. "#1001". Only unique within a store.
+  shopifyOrderId     String
+  // Shopify GID (gid://shopify/Order/123). With storeId, this is the import dedup key.
+  shopifyGid         String?
+  storeId            String?
+  store              ShopifyStore?      @relation(fields: [storeId], references: [id], onDelete: Restrict)
   customerName       String
   customerEmail      String
   market             String             @default("UK")
@@ -68,6 +73,8 @@ model Order {
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @updatedAt
 
+  @@unique([storeId, shopifyGid])
+  @@index([shopifyOrderId])
   @@index([orderDate])
   @@index([status, orderDate])
   @@index([factoryName, orderDate])
@@ -141,4 +148,27 @@ model Session {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+}
+
+model ShopifyStore {
+  id                   String    @id @default(cuid())
+  name                 String
+  // Permanent store address, e.g. "acme.myshopify.com". Used for all API calls.
+  shopDomain           String    @unique
+  // Public storefront domain, e.g. "acme.com". Display only.
+  customDomain         String?
+  // Credentials of the store's custom-distribution app (Shopify Dev Dashboard). Secrets are encrypted.
+  clientId             String
+  clientSecret         String
+  accessToken          String?
+  accessTokenExpiresAt DateTime?
+  refreshToken         String?
+  dispatchSlaDays      Int       @default(2)
+  deliverySlaDays      Int       @default(5)
+  // Orders updated after this moment are fetched on the next sync.
+  lastSyncedAt         DateTime?
+  lastSyncError        String?
+  orders               Order[]
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
 }

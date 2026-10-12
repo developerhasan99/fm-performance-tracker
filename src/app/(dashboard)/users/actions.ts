@@ -2,11 +2,11 @@
 
 import { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
+import type { ActionResult } from "@/components/action-form";
 import { requireAdmin } from "@/lib/auth";
 import { hashPassword, normalizeEmail, passwordProblem } from "@/lib/password";
 import { getPrisma } from "@/lib/prisma";
 
-export type ActionResult = { ok: boolean; message: string } | undefined;
 
 const field = (formData: FormData, name: string) => String(formData.get(name) ?? "").trim();
 const fail = (message: string): ActionResult => ({ ok: false, message });

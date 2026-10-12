@@ -3,20 +3,21 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, CircleDollarSign, PackageCheck } from "lucide-react";
 import { StatusBadge } from "@/components/status-badge";
-import { formatCurrency, formatDate, getOrderByReference, issueLabels } from "@/lib/dashboard";
+import { formatCurrency, formatDate, getOrderById, issueLabels } from "@/lib/dashboard";
 import { requireUser } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
-export async function generateMetadata({ params }: { params: Promise<{ reference: string }> }): Promise<Metadata> {
-  const { reference } = await params;
-  return { title: `Order ${decodeURIComponent(reference)}` };
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
+  const { id } = await params;
+  const order = await getOrderById(id);
+  return { title: order ? `Order ${order.shopifyOrderId}` : "Order" };
 }
 
-export default async function OrderDetailPage({ params }: { params: Promise<{ reference: string }> }) {
+export default async function OrderDetailPage({ params }: { params: Promise<{ id: string }> }) {
   await requireUser();
-  const { reference } = await params;
-  const order = await getOrderByReference(decodeURIComponent(reference));
+  const { id } = await params;
+  const order = await getOrderById(id);
   if (!order) notFound();
   const itemsOrdered = order.items.reduce((total, item) => total + item.quantity, 0);
   const itemsShipped = order.items.reduce((total, item) => total + item.shippedQuantity, 0);
@@ -33,6 +34,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ re
           <div><div className="detail-stat-label">Delivery due</div><div className="detail-stat-value">{formatDate(order.deliveryDueAt)}</div></div>
           <div><div className="detail-stat-label">Factory</div><div className="detail-stat-value">{order.factoryName}</div></div>
           <div><div className="detail-stat-label">Carrier</div><div className="detail-stat-value">{order.carrier}</div></div>
+          {order.store && <div><div className="detail-stat-label">Store</div><div className="detail-stat-value">{order.store.name} · {order.store.customDomain ?? order.store.shopDomain}</div></div>}
         </div></section>
       </div>
       <div className="detail-content-grid">

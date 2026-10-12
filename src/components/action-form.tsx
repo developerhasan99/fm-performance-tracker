@@ -1,7 +1,8 @@
 "use client";
 
 import { useActionState, type ReactNode } from "react";
-import type { ActionResult } from "./actions";
+
+export type ActionResult = { ok: boolean; message: string } | undefined;
 
 export function ActionForm({ action, children, className, confirmMessage }: {
   action: (state: ActionResult, formData: FormData) => Promise<ActionResult>;

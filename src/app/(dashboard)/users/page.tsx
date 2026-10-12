@@ -4,7 +4,7 @@ import { isDemoMode, requireAdmin } from "@/lib/auth";
 import { formatDate } from "@/lib/dashboard";
 import { MIN_PASSWORD_LENGTH } from "@/lib/password";
 import { getPrisma } from "@/lib/prisma";
-import { ActionForm } from "./action-form";
+import { ActionForm } from "@/components/action-form";
 import { createUser, deleteUser, resetPassword } from "./actions";
 
 export const metadata: Metadata = { title: "Users" };
