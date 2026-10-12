@@ -3,8 +3,9 @@
 import { ClipboardList, LayoutDashboard, LogOut, PackageCheck, Store, Users } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import type { ReactNode } from "react";
+import { Suspense, type ReactNode } from "react";
 import { logout } from "@/app/login/actions";
+import { TopLoader } from "@/components/top-loader";
 
 const navigation = [
   { href: "/", label: "Overview", icon: LayoutDashboard },
@@ -22,6 +23,7 @@ export function AppShell({ children, isDemoMode, user }: { children: ReactNode; 
 
   return (
     <div className="app-shell">
+      <Suspense><TopLoader /></Suspense>
       <aside className="sidebar">
         <Link className="brand" href="/">
           <span className="brand-mark"><PackageCheck size={17} strokeWidth={1.8} /></span>

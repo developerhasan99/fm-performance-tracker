@@ -126,7 +126,8 @@ h1{margin:0 0 7px;font-size:26px;font-weight:700;letter-spacing:-1px;line-height
 .auth-form .search-button{justify-content:center}
 .form-error,.form-success{margin:6px 0 0;font-size:11px}.form-error{color:var(--red)}.form-success{color:var(--green)}
 .users-panel{margin-bottom:16px}
-.inline-form fieldset{display:flex;flex-wrap:wrap;align-items:center;gap:8px;min-width:0;margin:0;border:0;padding:0}
+fieldset{min-width:0;margin:0;border:0;padding:0}
+.inline-form fieldset{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
 .secondary-button,.danger-button{display:inline-flex;height:30px;align-items:center;gap:5px;border:1px solid #e4e8e4;border-radius:5px;background:#fff;color:#4f5b55;padding:0 10px;font-size:11px;font-weight:600;cursor:pointer}
 .danger-button{border-color:#ecd3d0;color:var(--red)}
 button:disabled{opacity:.6;cursor:default}
@@ -135,3 +136,12 @@ button:disabled{opacity:.6;cursor:default}
 .setup-steps code{border-radius:3px;background:#f2f4f1;padding:1px 4px;font-size:10px;word-break:break-all}
 .sla-field{display:flex;align-items:center;gap:6px;color:#626d66;font-size:11px}.sla-field .text-input{width:58px}
 .row-actions{display:flex;flex-wrap:wrap;gap:6px}
+/* Whole row opens the order: the reference link stretches over its row. */
+.row-link{position:relative;cursor:pointer}
+.row-link .order-reference::after{content:"";position:absolute;inset:0}
+.row-link:focus-within{outline:2px solid var(--green);outline-offset:-2px}
+.pagination{display:flex;align-items:center;justify-content:flex-end;gap:10px;margin-top:14px;color:#8d9792;font-size:11px}
+.pagination [aria-disabled="true"]{opacity:.45;cursor:default}
+.top-loader{position:fixed;z-index:50;inset:0 0 auto;height:3px;pointer-events:none}
+.top-loader-bar{height:100%;background:var(--green);box-shadow:0 0 6px rgba(50,116,94,.5);transition:width .2s ease-out}
+.top-loader-bar.done{opacity:0;transition:width .15s ease-out,opacity .2s ease .15s}

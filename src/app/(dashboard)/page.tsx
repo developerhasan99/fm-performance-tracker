@@ -101,7 +101,7 @@ export default async function OverviewPage() {
 
       <section className="panel table-panel">
         <div className="panel-heading"><div><h2 className="panel-title">Recent orders</h2><p className="panel-description">Latest orders across your fulfilment network</p></div><Link className="table-link" href="/orders">All orders <ArrowRight size={12} /></Link></div>
-        <OrdersTable orders={snapshot.recentOrders} compact />
+        <OrdersTable orders={snapshot.recentOrders} />
       </section>
     </>
   );

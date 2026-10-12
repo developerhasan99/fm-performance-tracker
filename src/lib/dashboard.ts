@@ -178,33 +178,40 @@ export async function getDashboardSnapshot() {
   };
 }
 
-export async function getOrders(search: string, status?: FulfillmentStatus) {
+export const ORDERS_PAGE_SIZE = 50;
+
+/** One page of orders (1-based) plus the total match count. */
+export async function getOrders(search: string, status: FulfillmentStatus | undefined, page: number) {
+  const skip = (page - 1) * ORDERS_PAGE_SIZE;
   if (isDemoMode()) {
     const query = search.trim().toLowerCase();
-    return demoOrders.filter((order) => {
+    const matches = demoOrders.filter((order) => {
       const matchesSearch = !query || [
         order.shopifyOrderId, order.customerName, order.customerEmail, order.factoryName, order.carrier,
       ].some((value) => value.toLowerCase().includes(query));
       return matchesSearch && (!status || order.status === status);
     });
+    return { orders: matches.slice(skip, skip + ORDERS_PAGE_SIZE), total: matches.length };
   }
 
   const query = search.trim();
-  return getPrisma().order.findMany({
-    where: {
-      ...(status ? { status } : {}),
-      ...(query ? { OR: [
-        { shopifyOrderId: { contains: query, mode: "insensitive" } },
-        { customerName: { contains: query, mode: "insensitive" } },
-        { customerEmail: { contains: query, mode: "insensitive" } },
-        { factoryName: { contains: query, mode: "insensitive" } },
-        { carrier: { contains: query, mode: "insensitive" } },
-        { store: { name: { contains: query, mode: "insensitive" } } },
-      ] } : {}),
-    },
-    include: orderInclude,
-    orderBy: { orderDate: "desc" },
-  });
+  const where: Prisma.OrderWhereInput = {
+    ...(status ? { status } : {}),
+    ...(query ? { OR: [
+      { shopifyOrderId: { contains: query, mode: "insensitive" } },
+      { customerName: { contains: query, mode: "insensitive" } },
+      { customerEmail: { contains: query, mode: "insensitive" } },
+      { factoryName: { contains: query, mode: "insensitive" } },
+      { carrier: { contains: query, mode: "insensitive" } },
+      { store: { name: { contains: query, mode: "insensitive" } } },
+    ] } : {}),
+  };
+  const prisma = getPrisma();
+  const [orders, total] = await Promise.all([
+    prisma.order.findMany({ where, include: orderInclude, orderBy: [{ orderDate: "desc" }, { id: "desc" }], skip, take: ORDERS_PAGE_SIZE }),
+    prisma.order.count({ where }),
+  ]);
+  return { orders, total };
 }
 
 export async function getOrderById(id: string) {

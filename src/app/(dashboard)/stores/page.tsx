@@ -33,7 +33,6 @@ export default async function StoresPage({ searchParams }: { searchParams: Promi
         <ol className="setup-steps">
           <li>In <a href="https://dev.shopify.com/dashboard" target="_blank" rel="noreferrer">dev.shopify.com</a>, create an app and choose <strong>Custom distribution</strong> for this store.</li>
           <li>In the app version, set the scope <code>{SHOPIFY_SCOPES}</code>, the App URL to <code>{redirectUri.replace("/api/shopify/callback", "")}</code> and the redirect URL to <code>{redirectUri}</code>, then release it.</li>
-          <li>Under API access, enable protected customer data (name and email), or imported orders will have no customer name or email.</li>
           <li>Copy the app&apos;s Client ID and Client secret into the form below, then click <strong>Connect</strong> and approve it in Shopify.</li>
         </ol>
       </section>

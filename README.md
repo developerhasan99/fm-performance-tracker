@@ -40,7 +40,7 @@ Sample mode (`DASHBOARD_DEMO_MODE="true"`) has no database and skips sign-in; it
 
 ## Shopify order import
 
-Admins add stores on the **Stores** page (Shopify domain, optional custom domain, and SLA days). Each store needs its own app made in the [Shopify Dev Dashboard](https://dev.shopify.com/dashboard) with **custom distribution**, scope `read_orders`, redirect URL `APP_URL/api/shopify/callback`, and protected customer data (name, email) enabled. Paste the app's Client ID and secret, click **Connect**, approve in Shopify.
+Admins add stores on the **Stores** page (Shopify domain, optional custom domain, and SLA days). Each store needs its own app made in the [Shopify Dev Dashboard](https://dev.shopify.com/dashboard) with **custom distribution**, scope `read_orders`, redirect URL `APP_URL/api/shopify/callback`. Paste the app's Client ID and secret, click **Connect**, approve in Shopify. Custom-distribution apps get customer name/email access automatically; if imported orders show "Unknown customer", that access is missing.
 
 - New and updated orders are fetched every `SHOPIFY_SYNC_HOURS` (default 3) by an in-process timer, plus a **Sync now** button. The first sync covers the last 60 days (Shopify's limit for `read_orders`).
 - An order is identified by store + Shopify order ID (a database unique key), so re-syncing updates it instead of duplicating it.
