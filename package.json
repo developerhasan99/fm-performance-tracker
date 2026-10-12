@@ -1,0 +1,41 @@
+{
+  "name": "fulfilment-dashboard",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate dev",
+    "db:seed": "prisma db seed",
+    "postinstall": "prisma generate",
+    "db:deploy": "prisma migrate deploy"
+  },
+  "overrides": {
+    "deepmerge-ts": "^8.0.0",
+    "mysql2": "^3.24.5"
+  },
+  "dependencies": {
+    "@prisma/adapter-pg": "7.10.0",
+    "@prisma/client": "7.10.0",
+    "lucide-react": "^1.55.0",
+    "next": "16.4.0",
+    "pg": "^8.16.3",
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/pg": "^8.23.1",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "dotenv": "^17.4.2",
+    "eslint": "^9",
+    "prisma": "7.10.0",
+    "tsx": "^4.20.6",
+    "typescript": "^5",
+    "typescript-eslint": "^8.56.0"
+  }
+}

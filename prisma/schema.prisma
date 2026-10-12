@@ -1,0 +1,116 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum FulfillmentStatus {
+  placed
+  processing
+  in_transit
+  delivered
+  delayed
+  cancelled
+}
+
+enum IssueCategory {
+  late_delivery
+  not_dispatched
+  lost_in_transit
+  missing_item
+  wrong_item
+  damaged
+  address_error
+  cancellation
+  other
+}
+
+enum IssueResolution {
+  pending
+  resolved
+  refunded
+  replacement
+  reshipped
+}
+
+enum EventSource {
+  shopify
+  factory
+  carrier
+  support
+}
+
+model Order {
+  id                 String             @id @default(cuid())
+  shopifyOrderId     String             @unique
+  customerName       String
+  customerEmail      String
+  market             String             @default("UK")
+  currency           String             @default("GBP")
+  factoryName        String
+  carrier            String
+  shippingService    String
+  orderDate          DateTime
+  dispatchDueAt      DateTime
+  deliveryDueAt      DateTime
+  factoryReceivedAt  DateTime?
+  pickedAt           DateTime?
+  packedAt           DateTime?
+  carrierCollectedAt DateTime?
+  deliveredAt        DateTime?
+  status             FulfillmentStatus  @default(placed)
+  isSampleData       Boolean            @default(false)
+  items              OrderItem[]
+  contacts           SupportContact[]
+  events             FulfillmentEvent[]
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  @@index([orderDate])
+  @@index([status, orderDate])
+  @@index([factoryName, orderDate])
+  @@index([carrier, orderDate])
+}
+
+model OrderItem {
+  id              String @id @default(cuid())
+  orderId         String
+  sku             String
+  name            String
+  quantity        Int
+  shippedQuantity Int
+  unitPriceCents  Int
+  order           Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+}
+
+model SupportContact {
+  id                   String          @id @default(cuid())
+  orderId              String
+  category             IssueCategory
+  resolution           IssueResolution @default(pending)
+  channel              String          @default("email")
+  contactedAt          DateTime
+  refundAmountCents    Int             @default(0)
+  replacementCostCents Int             @default(0)
+  handlingMinutes      Int             @default(0)
+  order                Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId, contactedAt])
+  @@index([category, contactedAt])
+}
+
+model FulfillmentEvent {
+  id         String      @id @default(cuid())
+  orderId    String
+  source     EventSource
+  eventType  String
+  details    String?
+  occurredAt DateTime
+  order      Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId, occurredAt])
+}
