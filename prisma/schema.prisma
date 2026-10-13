@@ -13,6 +13,8 @@ enum FulfillmentStatus {
   delivered
   delayed
   cancelled
+  // Fulfilled order with nothing to ship (e.g. digital products).
+  completed
 }
 
 enum IssueCategory {

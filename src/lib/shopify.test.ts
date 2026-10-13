@@ -25,7 +25,7 @@ const base: ShopifyOrder = {
   id: "gid://shopify/Order/1", name: "#1001", email: "a@b.com", createdAt: "2026-10-01T10:00:00Z", cancelledAt: null,
   displayFulfillmentStatus: "UNFULFILLED", currencyCode: "GBP",
   shippingAddress: { name: "Ada", countryCodeV2: "GB" }, billingAddress: null, shippingLine: { title: "Standard" },
-  lineItems: { nodes: [{ sku: "MUG", name: "Mug", currentQuantity: 2, unfulfilledQuantity: 2, originalUnitPriceSet: { shopMoney: { amount: "12.50" } } }] },
+  lineItems: { nodes: [{ sku: "MUG", name: "Mug", requiresShipping: true, currentQuantity: 2, unfulfilledQuantity: 2, originalUnitPriceSet: { shopMoney: { amount: "12.50" } } }] },
   fulfillments: [],
 };
 const sla = { dispatchSlaDays: 2, deliverySlaDays: 5 };
@@ -38,7 +38,7 @@ test("order status mapping", () => {
 
   const shipped: ShopifyOrder = { ...base, displayFulfillmentStatus: "FULFILLED",
     lineItems: { nodes: [{ ...base.lineItems.nodes[0], unfulfilledQuantity: 0 }] },
-    fulfillments: [{ status: "SUCCESS", createdAt: "2026-10-02T09:00:00Z", deliveredAt: null, trackingInfo: [{ company: "DPD", number: "123" }] }] };
+    fulfillments: [{ status: "SUCCESS", requiresShipping: true, createdAt: "2026-10-02T09:00:00Z", deliveredAt: null, trackingInfo: [{ company: "DPD", number: "123" }] }] };
   const inTransit = mapShopifyOrder(shipped, sla, new Date("2026-10-03T00:00:00Z"));
   assert.equal(inTransit.order.status, "in_transit");
   assert.equal(inTransit.order.carrier, "DPD");
@@ -48,4 +48,23 @@ test("order status mapping", () => {
   assert.equal(delivered.order.deliveredAt?.toISOString(), "2026-10-04T12:00:00.000Z");
 
   assert.equal(mapShopifyOrder({ ...base, cancelledAt: "2026-10-01T11:00:00Z" }, sla).order.status, "cancelled");
+});
+
+test("orders with nothing to ship", () => {
+  const ebook = { sku: "EBOOK", name: "E-book", requiresShipping: false, currentQuantity: 1, unfulfilledQuantity: 0, originalUnitPriceSet: { shopMoney: { amount: "5.00" } } };
+  const digitalFulfillment = { status: "SUCCESS", requiresShipping: false, createdAt: "2026-10-01T10:05:00Z", deliveredAt: null, trackingInfo: [] };
+  const digital: ShopifyOrder = { ...base, displayFulfillmentStatus: "FULFILLED", lineItems: { nodes: [ebook] }, fulfillments: [digitalFulfillment] };
+  const done = mapShopifyOrder(digital, sla, new Date("2026-10-20T00:00:00Z"));
+  assert.equal(done.order.status, "completed");
+  assert.equal(done.order.carrierCollectedAt, null);
+  // Unfulfilled digital order waits, but is never "delayed" by shipping SLAs.
+  const waiting = mapShopifyOrder({ ...digital, displayFulfillmentStatus: "UNFULFILLED", lineItems: { nodes: [{ ...ebook, unfulfilledQuantity: 1 }] }, fulfillments: [] }, sla, new Date("2026-10-20T00:00:00Z"));
+  assert.equal(waiting.order.status, "placed");
+
+  // Mixed order: the digital fulfillment must not block "delivered".
+  const mug = { ...base.lineItems.nodes[0], unfulfilledQuantity: 0 };
+  const parcel = { status: "SUCCESS", requiresShipping: true, createdAt: "2026-10-02T09:00:00Z", deliveredAt: "2026-10-04T12:00:00Z", trackingInfo: [{ company: "DPD", number: "1" }] };
+  const mixed = mapShopifyOrder({ ...base, displayFulfillmentStatus: "FULFILLED", lineItems: { nodes: [mug, ebook] }, fulfillments: [digitalFulfillment, parcel] }, sla, new Date("2026-10-20T00:00:00Z"));
+  assert.equal(mixed.order.status, "delivered");
+  assert.equal(mixed.order.carrierCollectedAt?.toISOString(), "2026-10-02T09:00:00.000Z");
 });

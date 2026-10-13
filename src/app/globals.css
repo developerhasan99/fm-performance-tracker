@@ -81,7 +81,7 @@ h1{margin:0 0 7px;font-size:26px;font-weight:700;letter-spacing:-1px;line-height
 .order-reference{color:#334b3e;font-weight:600}.customer-cell{color:#404b45;font-weight:500}
 .status-badge{display:inline-flex;align-items:center;gap:5px;border-radius:3px;padding:4px 7px;font-size:9px;font-weight:600}
 .status-badge::before{width:5px;height:5px;border-radius:50%;background:currentColor;content:""}
-.status-badge.delivered{background:var(--green-soft);color:var(--green)}
+.status-badge.delivered,.status-badge.completed{background:var(--green-soft);color:var(--green)}
 .status-badge.in_transit,.status-badge.processing{background:#eff2f4;color:#687985}
 .status-badge.delayed{background:var(--amber-soft);color:var(--amber)}
 .status-badge.placed{background:#f1f2ef;color:#77817b}
@@ -145,3 +145,5 @@ button:disabled{opacity:.6;cursor:default}
 .top-loader{position:fixed;z-index:50;inset:0 0 auto;height:3px;pointer-events:none}
 .top-loader-bar{height:100%;background:var(--green);box-shadow:0 0 6px rgba(50,116,94,.5);transition:width .2s ease-out}
 .top-loader-bar.done{opacity:0;transition:width .15s ease-out,opacity .2s ease .15s}
+.orders-toolbar{flex-wrap:wrap}
+.date-field{display:flex;align-items:center;gap:6px;color:#65716a;font-size:11px}.date-field .text-input{height:36px}

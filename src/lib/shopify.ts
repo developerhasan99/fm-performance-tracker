@@ -102,8 +102,8 @@ const ORDERS_QUERY = `query Orders($cursor: String, $query: String) {
       shippingAddress { name countryCodeV2 }
       billingAddress { name }
       shippingLine { title }
-      lineItems(first: 50) { nodes { sku name currentQuantity unfulfilledQuantity originalUnitPriceSet { shopMoney { amount } } } }
-      fulfillments(first: 10) { status createdAt deliveredAt trackingInfo(first: 1) { company number } }
+      lineItems(first: 50) { nodes { sku name requiresShipping currentQuantity unfulfilledQuantity originalUnitPriceSet { shopMoney { amount } } } }
+      fulfillments(first: 10) { status requiresShipping createdAt deliveredAt trackingInfo(first: 1) { company number } }
     }
   }
 }`;
@@ -119,8 +119,8 @@ export type ShopifyOrder = {
   shippingAddress: { name: string | null; countryCodeV2: string | null } | null;
   billingAddress: { name: string | null } | null;
   shippingLine: { title: string } | null;
-  lineItems: { nodes: { sku: string | null; name: string; currentQuantity: number; unfulfilledQuantity: number; originalUnitPriceSet: { shopMoney: { amount: string } } }[] };
-  fulfillments: { status: string; createdAt: string; deliveredAt: string | null; trackingInfo: { company: string | null; number: string | null }[] }[];
+  lineItems: { nodes: { sku: string | null; name: string; requiresShipping: boolean; currentQuantity: number; unfulfilledQuantity: number; originalUnitPriceSet: { shopMoney: { amount: string } } }[] };
+  fulfillments: { status: string; requiresShipping: boolean; createdAt: string; deliveredAt: string | null; trackingInfo: { company: string | null; number: string | null }[] }[];
 };
 
 type OrdersPage = { orders: { pageInfo: { hasNextPage: boolean; endCursor: string | null }; nodes: ShopifyOrder[] } };
@@ -155,25 +155,31 @@ export function mapShopifyOrder(order: ShopifyOrder, sla: { dispatchSlaDays: num
   const orderDate = new Date(order.createdAt);
   const dispatchDueAt = new Date(orderDate.getTime() + sla.dispatchSlaDays * DAY);
   const deliveryDueAt = new Date(orderDate.getTime() + sla.deliverySlaDays * DAY);
-  const items = order.lineItems.nodes
-    .filter((item) => item.currentQuantity > 0)
-    .map((item) => ({
-      sku: item.sku ?? "",
-      name: item.name,
-      quantity: item.currentQuantity,
-      shippedQuantity: Math.max(0, item.currentQuantity - item.unfulfilledQuantity),
-      unitPriceCents: toCents(item.originalUnitPriceSet.shopMoney.amount),
-    }));
+  const lines = order.lineItems.nodes.filter((item) => item.currentQuantity > 0);
+  // Digital products, gift cards, services: nothing for a factory or carrier to do.
+  const needsShipping = lines.some((item) => item.requiresShipping);
+  const items = lines.map((item) => ({
+    sku: item.sku ?? "",
+    name: item.name,
+    quantity: item.currentQuantity,
+    shippedQuantity: Math.max(0, item.currentQuantity - item.unfulfilledQuantity),
+    unitPriceCents: toCents(item.originalUnitPriceSet.shopMoney.amount),
+  }));
   const fulfillments = order.fulfillments.filter((fulfillment) => fulfillment.status === "SUCCESS");
+  // Only fulfillments with physical items involve a carrier; digital ones never get a delivered date.
+  const shipments = fulfillments.filter((fulfillment) => fulfillment.requiresShipping);
   // ponytail: fulfillment creation is treated as carrier collection; swap in carrier scan events once a carrier feed exists.
-  const carrierCollectedAt = earliest(fulfillments.map((fulfillment) => new Date(fulfillment.createdAt)));
-  const allShipped = items.length > 0 && items.every((item) => item.shippedQuantity >= item.quantity);
-  const allDelivered = fulfillments.length > 0 && fulfillments.every((fulfillment) => fulfillment.deliveredAt);
-  const deliveredAt = allShipped && allDelivered ? latest(fulfillments.map((fulfillment) => new Date(fulfillment.deliveredAt!))) : null;
-  const tracking = fulfillments.flatMap((fulfillment) => fulfillment.trackingInfo)[0];
+  const carrierCollectedAt = earliest(shipments.map((fulfillment) => new Date(fulfillment.createdAt)));
+  const allFulfilled = lines.length > 0 && lines.every((item) => item.unfulfilledQuantity === 0);
+  const allShippableSent = lines.filter((item) => item.requiresShipping).every((item) => item.unfulfilledQuantity === 0);
+  const allDelivered = shipments.length > 0 && shipments.every((fulfillment) => fulfillment.deliveredAt);
+  const deliveredAt = allShippableSent && allDelivered ? latest(shipments.map((fulfillment) => new Date(fulfillment.deliveredAt!))) : null;
+  const tracking = shipments.flatMap((fulfillment) => fulfillment.trackingInfo)[0];
 
   let status: FulfillmentStatus;
   if (order.cancelledAt) status = "cancelled";
+  // No SLA applies to orders with nothing to ship, so they are never "delayed".
+  else if (!needsShipping) status = allFulfilled ? "completed" : order.displayFulfillmentStatus !== "UNFULFILLED" ? "processing" : "placed";
   else if (deliveredAt) status = "delivered";
   else if ((!carrierCollectedAt && now > dispatchDueAt) || now > deliveryDueAt) status = "delayed";
   else if (carrierCollectedAt) status = "in_transit";
@@ -182,6 +188,10 @@ export function mapShopifyOrder(order: ShopifyOrder, sla: { dispatchSlaDays: num
 
   const events = [{ eventType: "Order placed", details: `Order ${order.name} received from Shopify`, occurredAt: orderDate }];
   for (const fulfillment of fulfillments) {
+    if (!fulfillment.requiresShipping) {
+      events.push({ eventType: "Fulfilled in Shopify", details: "No shipping required", occurredAt: new Date(fulfillment.createdAt) });
+      continue;
+    }
     const info = fulfillment.trackingInfo[0];
     events.push({ eventType: "Fulfilled in Shopify", details: [info?.company, info?.number].filter(Boolean).join(" · ") || "No tracking details", occurredAt: new Date(fulfillment.createdAt) });
     if (fulfillment.deliveredAt) events.push({ eventType: "Delivered", details: "Marked delivered in Shopify", occurredAt: new Date(fulfillment.deliveredAt) });
