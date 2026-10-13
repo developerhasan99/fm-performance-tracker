@@ -10,7 +10,7 @@ import { SHOPIFY_OAUTH_COOKIE, appUrl } from "@/lib/app-url";
 import { requireAdmin } from "@/lib/auth";
 import { encrypt } from "@/lib/encryption";
 import { getPrisma } from "@/lib/prisma";
-import { authorizeUrl, normalizeCustomDomain, normalizeShopDomain, syncStore } from "@/lib/shopify";
+import { authorizeUrl, getSyncProgress, normalizeCustomDomain, normalizeShopDomain, syncStore } from "@/lib/shopify";
 
 const field = (formData: FormData, name: string) => String(formData.get(name) ?? "").trim();
 const fail = (message: string): ActionResult => ({ ok: false, message });
@@ -66,14 +66,13 @@ export async function connectStore(_state: ActionResult, formData: FormData): Pr
 
 export async function syncNow(_state: ActionResult, formData: FormData): Promise<ActionResult> {
   await requireAdmin();
-  try {
-    const result = await syncStore(field(formData, "storeId"));
-    revalidatePath("/stores");
-    return result.skipped ? { ok: true, message: "A sync is already running." } : { ok: true, message: `Synced ${result.imported} new or updated orders.` };
-  } catch (error) {
-    revalidatePath("/stores");
-    return fail(error instanceof Error ? error.message : "Sync failed.");
-  }
+  const storeId = field(formData, "storeId");
+  if (getSyncProgress(storeId)) return { ok: true, message: "A sync is already running." };
+  // Runs in the background (the server is long-lived); progress and any error show on the store row.
+  // syncStore registers its progress synchronously, so the re-render below already shows "Syncing…".
+  void syncStore(storeId).catch((error) => console.error(`[shopify] sync ${storeId}: ${error instanceof Error ? error.message : error}`));
+  revalidatePath("/stores");
+  return undefined;
 }
 
 export async function deleteStore(_state: ActionResult, formData: FormData): Promise<ActionResult> {

@@ -15,6 +15,7 @@ async function allOrders(): Promise<OrderSummary[]> {
   if (isDemoMode()) return demoOrders;
   return getPrisma().order.findMany({
     where: {
+      requiresShipping: true,
       orderDate: {
         gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
       },
@@ -71,8 +72,8 @@ export async function getDashboardSnapshot() {
   const orders = await allOrders();
   const now = new Date();
   const cutoff = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-  // Fulfilment metrics cover physical orders only; cancelled and no-shipping (completed) orders are left out.
-  const current = orders.filter((order) => order.orderDate >= cutoff && order.status !== "cancelled" && order.status !== "completed");
+  // Fulfilment metrics cover physical orders only; cancelled and no-shipping orders are left out.
+  const current = orders.filter((order) => order.orderDate >= cutoff && order.status !== "cancelled" && order.requiresShipping);
   const delivered = current.filter((order) => order.deliveredAt);
   const otif = delivered.filter((order) => isOnTime(order) && isInFull(order));
   const dispatchEligible = current.filter(
@@ -186,6 +187,8 @@ export type OrderFilters = {
   search: string;
   status?: FulfillmentStatus;
   storeId?: string;
+  /** Include orders with nothing to ship (hidden by default). */
+  includeNoShipping?: boolean;
   /** Order date range: from is inclusive, before is exclusive. */
   from?: Date;
   before?: Date;
@@ -193,7 +196,7 @@ export type OrderFilters = {
 };
 
 /** One page of orders (1-based) plus the total match count. */
-export async function getOrders({ search, status, storeId, from, before, page }: OrderFilters) {
+export async function getOrders({ search, status, storeId, includeNoShipping, from, before, page }: OrderFilters) {
   const skip = (page - 1) * ORDERS_PAGE_SIZE;
   if (isDemoMode()) {
     const query = search.trim().toLowerCase();
@@ -201,7 +204,7 @@ export async function getOrders({ search, status, storeId, from, before, page }:
       const matchesSearch = !query || [
         order.shopifyOrderId, order.customerName, order.customerEmail, order.factoryName, order.carrier,
       ].some((value) => value.toLowerCase().includes(query));
-      return matchesSearch && (!status || order.status === status) && !storeId && (!from || order.orderDate >= from) && (!before || order.orderDate < before);
+      return matchesSearch && (!status || order.status === status) && !storeId && (includeNoShipping || order.requiresShipping) && (!from || order.orderDate >= from) && (!before || order.orderDate < before);
     });
     return { orders: matches.slice(skip, skip + ORDERS_PAGE_SIZE), total: matches.length };
   }
@@ -210,6 +213,7 @@ export async function getOrders({ search, status, storeId, from, before, page }:
   const where: Prisma.OrderWhereInput = {
     ...(status ? { status } : {}),
     ...(storeId ? { storeId } : {}),
+    ...(includeNoShipping ? {} : { requiresShipping: true }),
     ...(from || before ? { orderDate: { ...(from && { gte: from }), ...(before && { lt: before }) } } : {}),
     ...(query ? { OR: [
       { shopifyOrderId: { contains: query, mode: "insensitive" } },

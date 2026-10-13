@@ -213,6 +213,7 @@ export function mapShopifyOrder(order: ShopifyOrder, sla: { dispatchSlaDays: num
       carrierCollectedAt,
       deliveredAt,
       status,
+      requiresShipping: needsShipping,
     },
     items,
     events,
@@ -238,11 +239,15 @@ async function saveOrder(store: ShopifyStore, shopifyOrder: ShopifyOrder) {
 }
 
 // Shared across module copies in one process so the scheduler and "Sync now" don't overlap on a store.
-const running: Set<string> = ((globalThis as { shopifySyncRunning?: Set<string> }).shopifySyncRunning ??= new Set());
+// Also the live progress shown on the Stores page.
+type SyncProgress = { startedAt: Date; imported: number };
+const running: Map<string, SyncProgress> = ((globalThis as { shopifySyncProgress?: Map<string, SyncProgress> }).shopifySyncProgress ??= new Map());
+export const getSyncProgress = (storeId: string) => running.get(storeId);
 
 export async function syncStore(storeId: string) {
   if (running.has(storeId)) return { imported: 0, skipped: true };
-  running.add(storeId);
+  const progress: SyncProgress = { startedAt: new Date(), imported: 0 };
+  running.set(storeId, progress);
   const prisma = getPrisma();
   try {
     const store = await prisma.shopifyStore.findUniqueOrThrow({ where: { id: storeId } });
@@ -256,6 +261,7 @@ export async function syncStore(storeId: string) {
       const page: OrdersPage = await adminGraphql<OrdersPage>(store.shopDomain, token, ORDERS_QUERY, { cursor, query: `updated_at:>='${since.toISOString()}'` });
       for (const order of page.orders.nodes) await saveOrder(store, order);
       imported += page.orders.nodes.length;
+      progress.imported = imported;
       cursor = page.orders.pageInfo.hasNextPage ? page.orders.pageInfo.endCursor : null;
     } while (cursor);
     await prisma.shopifyStore.update({ where: { id: storeId }, data: { lastSyncedAt: startedAt, lastSyncError: null } });

@@ -147,3 +147,7 @@ button:disabled{opacity:.6;cursor:default}
 .top-loader-bar.done{opacity:0;transition:width .15s ease-out,opacity .2s ease .15s}
 .orders-toolbar{flex-wrap:wrap}
 .date-field{display:flex;align-items:center;gap:6px;color:#65716a;font-size:11px}.date-field .text-input{height:36px}
+.sync-running{display:inline-flex;align-items:center;gap:6px;color:var(--green);font-weight:600}
+.sync-spinner{width:10px;height:10px;border:2px solid var(--green-soft);border-top-color:var(--green);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media(prefers-reduced-motion:reduce){.sync-spinner{animation:none}}

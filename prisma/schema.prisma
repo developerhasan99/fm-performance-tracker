@@ -69,6 +69,8 @@ model Order {
   deliveredAt        DateTime?
   status             FulfillmentStatus  @default(placed)
   isSampleData       Boolean            @default(false)
+  // False when no item needs shipping (digital products, memberships). Hidden from lists and metrics by default.
+  requiresShipping   Boolean            @default(true)
   items              OrderItem[]
   contacts           SupportContact[]
   events             FulfillmentEvent[]
@@ -79,6 +81,7 @@ model Order {
   @@index([shopifyOrderId])
   @@index([orderDate])
   @@index([status, orderDate])
+  @@index([requiresShipping, orderDate])
   @@index([factoryName, orderDate])
   @@index([carrier, orderDate])
 }

@@ -56,6 +56,7 @@ test("orders with nothing to ship", () => {
   const digital: ShopifyOrder = { ...base, displayFulfillmentStatus: "FULFILLED", lineItems: { nodes: [ebook] }, fulfillments: [digitalFulfillment] };
   const done = mapShopifyOrder(digital, sla, new Date("2026-10-20T00:00:00Z"));
   assert.equal(done.order.status, "completed");
+  assert.equal(done.order.requiresShipping, false);
   assert.equal(done.order.carrierCollectedAt, null);
   // Unfulfilled digital order waits, but is never "delayed" by shipping SLAs.
   const waiting = mapShopifyOrder({ ...digital, displayFulfillmentStatus: "UNFULFILLED", lineItems: { nodes: [{ ...ebook, unfulfilledQuantity: 1 }] }, fulfillments: [] }, sla, new Date("2026-10-20T00:00:00Z"));
@@ -66,5 +67,6 @@ test("orders with nothing to ship", () => {
   const parcel = { status: "SUCCESS", requiresShipping: true, createdAt: "2026-10-02T09:00:00Z", deliveredAt: "2026-10-04T12:00:00Z", trackingInfo: [{ company: "DPD", number: "1" }] };
   const mixed = mapShopifyOrder({ ...base, displayFulfillmentStatus: "FULFILLED", lineItems: { nodes: [mug, ebook] }, fulfillments: [digitalFulfillment, parcel] }, sla, new Date("2026-10-20T00:00:00Z"));
   assert.equal(mixed.order.status, "delivered");
+  assert.equal(mixed.order.requiresShipping, true);
   assert.equal(mixed.order.carrierCollectedAt?.toISOString(), "2026-10-02T09:00:00.000Z");
 });

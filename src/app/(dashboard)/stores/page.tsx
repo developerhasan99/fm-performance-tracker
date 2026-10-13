@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { ActionForm } from "@/components/action-form";
+import { AutoRefresh } from "@/components/auto-refresh";
 import { appUrl } from "@/lib/app-url";
 import { isDemoMode, requireAdmin } from "@/lib/auth";
 import { formatDate } from "@/lib/dashboard";
 import { getPrisma } from "@/lib/prisma";
-import { SHOPIFY_SCOPES } from "@/lib/shopify";
+import { SHOPIFY_SCOPES, getSyncProgress } from "@/lib/shopify";
 import { addStore, connectStore, deleteStore, syncNow } from "./actions";
 
 export const metadata: Metadata = { title: "Stores" };
@@ -17,13 +18,15 @@ export default async function StoresPage({ searchParams }: { searchParams: Promi
   const params = await searchParams;
   const redirectUri = `${await appUrl()}/api/shopify/callback`;
   const syncHours = Number(process.env.SHOPIFY_SYNC_HOURS ?? 3);
-  const stores = await getPrisma().shopifyStore.findMany({
+  const storeRows = await getPrisma().shopifyStore.findMany({
     select: { id: true, name: true, shopDomain: true, customDomain: true, accessToken: true, lastSyncedAt: true, lastSyncError: true, dispatchSlaDays: true, deliverySlaDays: true, _count: { select: { orders: true } } },
     orderBy: { createdAt: "asc" },
   });
+  const stores = storeRows.map((store) => ({ ...store, sync: getSyncProgress(store.id) }));
 
   return (
     <>
+      <AutoRefresh active={stores.some((store) => store.sync)} />
       <div className="page-heading"><div><p className="eyebrow">Integrations</p><h1>Shopify stores</h1><p className="page-subtitle">{syncHours > 0 ? `New and updated orders are imported every ${syncHours} hours.` : "Background sync is off (SHOPIFY_SYNC_HOURS=0)."} Each order is stored once per store.</p></div></div>
       {params.connected && <div className="sample-banner" role="status"><span><strong>Connected {params.connected}.</strong> The first import is running in the background; refresh in a minute.</span></div>}
       {params.error && <p className="form-error panel" role="alert">{params.error}</p>}
@@ -62,8 +65,10 @@ export default async function StoresPage({ searchParams }: { searchParams: Promi
                     <td className="customer-cell">{store.name}</td>
                     <td>{store.shopDomain}{store.customDomain && <><br />{store.customDomain}</>}</td>
                     <td>
-                      {!store.accessToken ? "Not connected" : store.lastSyncError ? "Needs attention" : "Connected"}
-                      {store.lastSyncError && <div className="form-error">{store.lastSyncError}</div>}
+                      {store.sync ? (
+                        <span className="sync-running" role="status"><span className="sync-spinner" aria-hidden="true" />Syncing… {store.sync.imported} orders so far</span>
+                      ) : !store.accessToken ? "Not connected" : store.lastSyncError ? "Needs attention" : "Connected"}
+                      {!store.sync && store.lastSyncError && <div className="form-error">{store.lastSyncError}</div>}
                     </td>
                     <td>{store.lastSyncedAt ? formatDate(store.lastSyncedAt, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "Never"}</td>
                     <td>{store._count.orders}</td>
@@ -71,7 +76,7 @@ export default async function StoresPage({ searchParams }: { searchParams: Promi
                     <td>
                       <div className="row-actions">
                         <ActionForm action={connectStore}><input type="hidden" name="storeId" value={store.id} /><button className="secondary-button" type="submit">{store.accessToken ? "Reconnect" : "Connect"}</button></ActionForm>
-                        {store.accessToken && <ActionForm action={syncNow}><input type="hidden" name="storeId" value={store.id} /><button className="secondary-button" type="submit">Sync now</button></ActionForm>}
+                        {store.accessToken && !store.sync && <ActionForm action={syncNow}><input type="hidden" name="storeId" value={store.id} /><button className="secondary-button" type="submit">Sync now</button></ActionForm>}
                         {store._count.orders === 0 && <ActionForm action={deleteStore} confirmMessage={`Delete ${store.shopDomain}?`}><input type="hidden" name="storeId" value={store.id} /><button className="danger-button" type="submit">Delete</button></ActionForm>}
                       </div>
                     </td>
