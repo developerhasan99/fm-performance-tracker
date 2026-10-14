@@ -1,4 +1,4 @@
-import { getPrisma } from "@/lib/prisma";
+import { getPrisma, runInBatches } from "@/lib/prisma";
 
 type OrderRef = { id: string; storeId: string | null };
 type Candidate = { subjectNumbers: string[]; messageNumbers: string[] };
@@ -43,18 +43,18 @@ export async function linkTickets() {
   const byTracking = new Map(orders.filter((order) => order.trackingNumber).map((order) => [order.trackingNumber!, order]));
   const inboxStore = new Map(inboxes.map((inbox) => [`${inbox.accountId}|${inbox.externalInboxId}`, inbox.storeId]));
 
-  const updates = [];
+  const updates: { id: string; data: { orderId?: string; storeId: string | null; matchMethod?: string } }[] = [];
   let linked = 0;
   for (const ticket of tickets) {
     const match = findOrderForTicket(ticket, byOrderNumber, byTracking);
     if (match) {
       linked++;
-      updates.push(prisma.supportTicket.update({ where: { id: ticket.id }, data: { orderId: match.order.id, storeId: match.order.storeId, matchMethod: match.method } }));
+      updates.push({ id: ticket.id, data: { orderId: match.order.id, storeId: match.order.storeId, matchMethod: match.method } });
       continue;
     }
     const storeId = inboxStore.get(`${ticket.accountId}|${ticket.inboxId}`) ?? null;
-    if (storeId !== ticket.storeId) updates.push(prisma.supportTicket.update({ where: { id: ticket.id }, data: { storeId } }));
+    if (storeId !== ticket.storeId) updates.push({ id: ticket.id, data: { storeId } });
   }
-  for (let start = 0; start < updates.length; start += 500) await prisma.$transaction(updates.slice(start, start + 500));
+  await runInBatches(updates, ({ id, data }) => prisma.supportTicket.update({ where: { id }, data }));
   return { checked: tickets.length, linked };
 }

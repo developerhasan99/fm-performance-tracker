@@ -1,6 +1,6 @@
 import { Prisma, type IssueCategory } from "@prisma/client";
 import { decrypt } from "@/lib/encryption";
-import { getPrisma } from "@/lib/prisma";
+import { getPrisma, runInBatches } from "@/lib/prisma";
 import { linkTickets } from "@/lib/support-matching";
 
 const BASE_URL = "https://app.commslayer.com/api/integration/v1";
@@ -153,14 +153,14 @@ export async function syncSupportAccount(accountId: string) {
       const query = new URLSearchParams({ "page[limit]": String(PAGE_LIMIT), ...(cursor && { "page[after]": cursor }) });
       const page: Page<CommslayerConversation> = await request<Page<CommslayerConversation>>(token, `/conversations?${query}`);
       const inWindow = page.data.filter((conversation) => new Date(conversation.created_at) >= account.importFrom);
-      await prisma.$transaction(inWindow.map((conversation) => {
+      await runInBatches(inWindow, (conversation) => {
         const fields = ticketFields(conversation);
         return prisma.supportTicket.upsert({
           where: { accountId_externalId: { accountId, externalId: conversation.id } },
           create: { ...fields, accountId, externalId: conversation.id },
           update: fields,
         });
-      }));
+      });
       progress.imported += inWindow.length;
       cursor = isPageBeforeCutoff(page.data, account.importFrom) ? null : page.meta?.next_cursor ?? null;
     } while (cursor);
