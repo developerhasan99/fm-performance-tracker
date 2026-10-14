@@ -18,7 +18,12 @@ button{color:inherit}
 .source-note{margin:0 2px 15px;border:1px solid var(--line);border-radius:7px;background:#fcfcfb;padding:12px}
 .source-note-label{display:flex;align-items:center;gap:7px;color:#57635d;font-size:11px;font-weight:600}
 .source-dot{width:7px;height:7px;border-radius:50%;background:var(--amber)}
-.source-note p{margin:6px 0 0 14px;color:#929a96;font-size:10px;line-height:1.55}
+.source-note p{margin:4px 0 0 14px;color:#929a96;font-size:10px;line-height:1.5}.source-note-label+p{margin-top:6px}
+.source-note-link{display:block}.source-note-link:hover{border-color:#dfe5e0;background:#f8faf8}
+.source-dot.ok{background:var(--green)}.source-dot.warn{background:var(--amber)}.source-dot.error{background:var(--red)}.source-dot.idle{background:#b8bfbb}
+.source-dot.syncing{background:var(--green);animation:pulse 1.2s ease-in-out infinite}
+@keyframes pulse{50%{opacity:.35}}
+@media(prefers-reduced-motion:reduce){.source-dot.syncing{animation:none}}
 .profile{display:flex;align-items:center;gap:10px;border-top:1px solid var(--line);padding:15px 7px 0}
 .avatar{display:grid;width:33px;height:33px;flex:0 0 33px;place-items:center;border-radius:50%;background:#e8eee8;color:#426451;font-size:11px;font-weight:700}
 .profile-name{font-size:12px;font-weight:600}.profile-role{margin-top:3px;color:var(--muted);font-size:10px}

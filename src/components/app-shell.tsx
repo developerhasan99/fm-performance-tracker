@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { Suspense, type ReactNode } from "react";
 import { logout } from "@/app/login/actions";
 import { TopLoader } from "@/components/top-loader";
+import type { DataSourceStatus } from "@/lib/data-sources";
 
 const navigation = [
   { href: "/", label: "Overview", icon: LayoutDashboard },
@@ -16,9 +17,15 @@ const navigation = [
 
 type ShellUser = { name: string; email: string; role: string };
 
-export function AppShell({ children, isDemoMode, user }: { children: ReactNode; isDemoMode: boolean; user: ShellUser }) {
+export function AppShell({ children, isDemoMode, sources, user }: { children: ReactNode; isDemoMode: boolean; sources: DataSourceStatus; user: ShellUser }) {
   const pathname = usePathname();
   const currentPage = navigation.findLast(({ href }) => href === "/" ? pathname === "/" : pathname.startsWith(href))?.label ?? "Overview";
+  const sourceCard = (
+    <>
+      <div className="source-note-label"><span className={`source-dot ${sources.tone}`} />Data sources</div>
+      {sources.lines.map((line) => <p key={line}>{line}</p>)}
+    </>
+  );
   const initials = user.name.split(/\s+/).map((part) => part[0]).join("").slice(0, 2).toUpperCase();
 
   return (
@@ -41,10 +48,9 @@ export function AppShell({ children, isDemoMode, user }: { children: ReactNode; 
           })}
         </nav>
         <div className="sidebar-bottom">
-          <div className="source-note">
-            <div className="source-note-label"><span className="source-dot" />Data sources</div>
-            <p>{isDemoMode ? "Sample preview · No database required" : "PostgreSQL · Imports not connected"}</p>
-          </div>
+          {isDemoMode
+            ? <div className="source-note">{sourceCard}</div>
+            : <Link className="source-note source-note-link" href="/stores" aria-label={`Data sources: ${sources.lines.join(". ")}. Manage stores`}>{sourceCard}</Link>}
           <div className="profile">
             <div className="avatar" aria-hidden="true">{initials}</div>
             <div><div className="profile-name">{user.name}</div><div className="profile-role">{user.email || "No sign-in required"}</div></div>
