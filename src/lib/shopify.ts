@@ -103,7 +103,7 @@ const ORDERS_QUERY = `query Orders($cursor: String, $query: String) {
       billingAddress { name }
       shippingLine { title }
       lineItems(first: 50) { nodes { sku name requiresShipping currentQuantity unfulfilledQuantity originalUnitPriceSet { shopMoney { amount } } } }
-      fulfillments(first: 10) { status requiresShipping createdAt deliveredAt trackingInfo(first: 1) { company number } }
+      fulfillments(first: 10) { status requiresShipping createdAt deliveredAt trackingInfo(first: 1) { company number url } }
     }
   }
 }`;
@@ -120,7 +120,7 @@ export type ShopifyOrder = {
   billingAddress: { name: string | null } | null;
   shippingLine: { title: string } | null;
   lineItems: { nodes: { sku: string | null; name: string; requiresShipping: boolean; currentQuantity: number; unfulfilledQuantity: number; originalUnitPriceSet: { shopMoney: { amount: string } } }[] };
-  fulfillments: { status: string; requiresShipping: boolean; createdAt: string; deliveredAt: string | null; trackingInfo: { company: string | null; number: string | null }[] }[];
+  fulfillments: { status: string; requiresShipping: boolean; createdAt: string; deliveredAt: string | null; trackingInfo: { company: string | null; number: string | null; url: string | null }[] }[];
 };
 
 type OrdersPage = { orders: { pageInfo: { hasNextPage: boolean; endCursor: string | null }; nodes: ShopifyOrder[] } };
@@ -146,6 +146,27 @@ async function adminGraphql<T>(shopDomain: string, token: string, query: string,
   }
 }
 
+// ponytail: name list, not exhaustive; add carriers as new stores bring them.
+const KNOWN_CARRIER = /\b(dpd|gls|dhl|ups|fedex|inpost|royal mail|evri|hermes|postnl|poczta polska|colissimo|chronopost|correos|la poste|bpost|postnord|yodel|parcelforce|tnt|usps|packeta|zasilkovna|orlen|mondial relay|sendcloud)\b/i;
+
+/** Marketplace imports (e.g. M2E/TikTok) often set tracking without a carrier name, but the shipping line names it ("GLS Poland"). */
+export function carrierFromShippingLine(title: string | undefined) {
+  const name = title?.replace(/\(.*\)/, "").trim();
+  return name && KNOWN_CARRIER.test(name) ? name : null;
+}
+
+/** Adds working days (Mon–Fri), keeping the time of day. Warehouse and carriers don't work weekends. */
+// ponytail: weekdays are judged in UTC and public holidays aren't skipped; add the shop timezone / a holiday list if needed.
+export function addWorkingDays(start: Date, days: number) {
+  const date = new Date(start);
+  for (let added = 0; added < days; ) {
+    date.setUTCDate(date.getUTCDate() + 1);
+    const weekday = date.getUTCDay();
+    if (weekday !== 0 && weekday !== 6) added++;
+  }
+  return date;
+}
+
 const toCents = (amount: string) => Math.round(Number(amount) * 100);
 const earliest = (dates: Date[]) => (dates.length ? new Date(Math.min(...dates.map(Number))) : null);
 const latest = (dates: Date[]) => (dates.length ? new Date(Math.max(...dates.map(Number))) : null);
@@ -153,8 +174,8 @@ const latest = (dates: Date[]) => (dates.length ? new Date(Math.max(...dates.map
 /** Pure mapping from a Shopify order to our columns, so it can be tested without a database. */
 export function mapShopifyOrder(order: ShopifyOrder, sla: { dispatchSlaDays: number; deliverySlaDays: number }, now = new Date()) {
   const orderDate = new Date(order.createdAt);
-  const dispatchDueAt = new Date(orderDate.getTime() + sla.dispatchSlaDays * DAY);
-  const deliveryDueAt = new Date(orderDate.getTime() + sla.deliverySlaDays * DAY);
+  const dispatchDueAt = addWorkingDays(orderDate, sla.dispatchSlaDays);
+  const deliveryDueAt = addWorkingDays(orderDate, sla.deliverySlaDays);
   const lines = order.lineItems.nodes.filter((item) => item.currentQuantity > 0);
   // Digital products, gift cards, services: nothing for a factory or carrier to do.
   const needsShipping = lines.some((item) => item.requiresShipping);
@@ -205,7 +226,9 @@ export function mapShopifyOrder(order: ShopifyOrder, sla: { dispatchSlaDays: num
       customerEmail: order.email ?? "",
       market: order.shippingAddress?.countryCodeV2 ?? "—",
       currency: order.currencyCode,
-      carrier: tracking?.company ?? "Unassigned",
+      carrier: tracking?.company || carrierFromShippingLine(order.shippingLine?.title) || "Unassigned",
+      trackingNumber: tracking?.number ?? null,
+      trackingUrl: tracking?.url ?? null,
       shippingService: order.shippingLine?.title ?? "",
       orderDate,
       dispatchDueAt,

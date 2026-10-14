@@ -34,6 +34,8 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
           <div><div className="detail-stat-label">Delivery due</div><div className="detail-stat-value">{formatDate(order.deliveryDueAt)}</div></div>
           <div><div className="detail-stat-label">Factory</div><div className="detail-stat-value">{order.factoryName}</div></div>
           <div><div className="detail-stat-label">Carrier</div><div className="detail-stat-value">{order.carrier}</div></div>
+          <div><div className="detail-stat-label">Shipping service</div><div className="detail-stat-value">{order.shippingService || "—"}</div></div>
+          <div><div className="detail-stat-label">Tracking</div><div className="detail-stat-value">{order.trackingNumber ? (order.trackingUrl?.startsWith("https://") ? <a className="tracking-link" href={order.trackingUrl} target="_blank" rel="noreferrer">{order.trackingNumber}</a> : order.trackingNumber) : "—"}</div></div>
           {order.store && <div><div className="detail-stat-label">Store</div><div className="detail-stat-value">{order.store.name} · {order.store.customDomain ?? order.store.shopDomain}</div></div>}
         </div></section>
       </div>

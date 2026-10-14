@@ -152,3 +152,4 @@ button:disabled{opacity:.6;cursor:default}
 @keyframes spin{to{transform:rotate(360deg)}}
 @media(prefers-reduced-motion:reduce){.sync-spinner{animation:none}}
 .sla-field .date-input{width:auto}
+.tracking-link{color:var(--green);text-decoration:underline}

@@ -41,7 +41,7 @@ export default async function StoresPage({ searchParams }: { searchParams: Promi
       </section>
 
       <section className="panel users-panel">
-        <div className="panel-heading"><div><h2 className="panel-title">Add store</h2><p className="panel-description" id="import-from-help">Orders created before the import date are never imported; leave it empty for the last 60 days (Shopify&apos;s limit). SLA days set the dispatch and delivery due dates.</p></div></div>
+        <div className="panel-heading"><div><h2 className="panel-title">Add store</h2><p className="panel-description" id="import-from-help">Orders created before the import date are never imported; leave it empty for the last 60 days (Shopify&apos;s limit). SLAs count working days (Mon–Fri) from the order time.</p></div></div>
         <ActionForm action={addStore} className="inline-form">
           <input className="text-input" name="name" placeholder="Store name" aria-label="Store name" required maxLength={100} />
           <input className="text-input" name="shopDomain" placeholder="acme.myshopify.com" aria-label="Shopify domain" required />
@@ -49,8 +49,8 @@ export default async function StoresPage({ searchParams }: { searchParams: Promi
           <input className="text-input" name="clientId" placeholder="Client ID" aria-label="Client ID" required autoComplete="off" />
           <input className="text-input" name="clientSecret" type="password" placeholder="Client secret" aria-label="Client secret" required autoComplete="off" />
           <label className="sla-field">Import orders from <input className="text-input date-input" name="importOrdersFrom" type="date" aria-describedby="import-from-help" /></label>
-          <label className="sla-field">Dispatch SLA <input className="text-input" name="dispatchSlaDays" type="number" min={0} max={60} defaultValue={2} /> days</label>
-          <label className="sla-field">Delivery SLA <input className="text-input" name="deliverySlaDays" type="number" min={0} max={60} defaultValue={5} /> days</label>
+          <label className="sla-field">Dispatch SLA <input className="text-input" name="dispatchSlaDays" type="number" min={0} max={60} defaultValue={2} /> working days</label>
+          <label className="sla-field">Delivery SLA <input className="text-input" name="deliverySlaDays" type="number" min={0} max={60} defaultValue={5} /> working days</label>
           <button className="search-button" type="submit">Add store</button>
         </ActionForm>
       </section>
@@ -74,7 +74,7 @@ export default async function StoresPage({ searchParams }: { searchParams: Promi
                     <td>{store.lastSyncedAt ? formatDate(store.lastSyncedAt, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "Never"}</td>
                     <td>{store._count.orders}</td>
                     <td>{store.importOrdersFrom ? formatDate(store.importOrdersFrom, { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }) : "Last 60 days"}</td>
-                    <td>{store.dispatchSlaDays}d / {store.deliverySlaDays}d</td>
+                    <td>{store.dispatchSlaDays} / {store.deliverySlaDays} working days</td>
                     <td>
                       <div className="row-actions">
                         <ActionForm action={connectStore}><input type="hidden" name="storeId" value={store.id} /><button className="secondary-button" type="submit">{store.accessToken ? "Reconnect" : "Connect"}</button></ActionForm>

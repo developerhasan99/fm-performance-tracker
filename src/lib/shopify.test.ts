@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { createHmac } from "node:crypto";
 import { test } from "node:test";
-import { isValidCallbackHmac, mapShopifyOrder, normalizeShopDomain, type ShopifyOrder } from "./shopify";
+import { addWorkingDays, carrierFromShippingLine, isValidCallbackHmac, mapShopifyOrder, normalizeShopDomain, type ShopifyOrder } from "./shopify";
 
 test("shop domain normalization rejects look-alikes", () => {
   assert.equal(normalizeShopDomain("Acme"), "acme.myshopify.com");
@@ -34,11 +34,13 @@ test("order status mapping", () => {
   const placed = mapShopifyOrder(base, sla, new Date("2026-10-02T00:00:00Z"));
   assert.equal(placed.order.status, "placed");
   assert.equal(placed.items[0].unitPriceCents, 1250);
-  assert.equal(mapShopifyOrder(base, sla, new Date("2026-10-04T00:00:00Z")).order.status, "delayed");
+  // Placed Thu 1 Oct, 2 working days → due Mon 5 Oct: not late over the weekend, late after Monday.
+  assert.equal(mapShopifyOrder(base, sla, new Date("2026-10-04T00:00:00Z")).order.status, "placed");
+  assert.equal(mapShopifyOrder(base, sla, new Date("2026-10-06T00:00:00Z")).order.status, "delayed");
 
   const shipped: ShopifyOrder = { ...base, displayFulfillmentStatus: "FULFILLED",
     lineItems: { nodes: [{ ...base.lineItems.nodes[0], unfulfilledQuantity: 0 }] },
-    fulfillments: [{ status: "SUCCESS", requiresShipping: true, createdAt: "2026-10-02T09:00:00Z", deliveredAt: null, trackingInfo: [{ company: "DPD", number: "123" }] }] };
+    fulfillments: [{ status: "SUCCESS", requiresShipping: true, createdAt: "2026-10-02T09:00:00Z", deliveredAt: null, trackingInfo: [{ company: "DPD", number: "123", url: null }] }] };
   const inTransit = mapShopifyOrder(shipped, sla, new Date("2026-10-03T00:00:00Z"));
   assert.equal(inTransit.order.status, "in_transit");
   assert.equal(inTransit.order.carrier, "DPD");
@@ -64,9 +66,29 @@ test("orders with nothing to ship", () => {
 
   // Mixed order: the digital fulfillment must not block "delivered".
   const mug = { ...base.lineItems.nodes[0], unfulfilledQuantity: 0 };
-  const parcel = { status: "SUCCESS", requiresShipping: true, createdAt: "2026-10-02T09:00:00Z", deliveredAt: "2026-10-04T12:00:00Z", trackingInfo: [{ company: "DPD", number: "1" }] };
+  const parcel = { status: "SUCCESS", requiresShipping: true, createdAt: "2026-10-02T09:00:00Z", deliveredAt: "2026-10-04T12:00:00Z", trackingInfo: [{ company: "DPD", number: "1", url: null }] };
   const mixed = mapShopifyOrder({ ...base, displayFulfillmentStatus: "FULFILLED", lineItems: { nodes: [mug, ebook] }, fulfillments: [digitalFulfillment, parcel] }, sla, new Date("2026-10-20T00:00:00Z"));
   assert.equal(mixed.order.status, "delivered");
   assert.equal(mixed.order.requiresShipping, true);
   assert.equal(mixed.order.carrierCollectedAt?.toISOString(), "2026-10-02T09:00:00.000Z");
+});
+
+test("carrier falls back to a shipping line that names a carrier", () => {
+  assert.equal(carrierFromShippingLine("GLS Poland (0.15 kg: Items 0.15 kg, Package 0.0 kg)"), "GLS Poland");
+  assert.equal(carrierFromShippingLine("Standard shipping"), null);
+  const imported: ShopifyOrder = { ...base, shippingLine: { title: "GLS Poland" }, displayFulfillmentStatus: "FULFILLED",
+    lineItems: { nodes: [{ ...base.lineItems.nodes[0], unfulfilledQuantity: 0 }] },
+    fulfillments: [{ status: "SUCCESS", requiresShipping: true, createdAt: "2026-10-02T09:00:00Z", deliveredAt: null, trackingInfo: [{ company: null, number: "71600526813", url: null }] }] };
+  const mapped = mapShopifyOrder(imported, sla, new Date("2026-10-03T00:00:00Z"));
+  assert.equal(mapped.order.carrier, "GLS Poland");
+  assert.equal(mapped.order.trackingNumber, "71600526813");
+  assert.equal(mapped.order.shippingService, "GLS Poland");
+});
+
+test("SLA due dates skip weekends", () => {
+  // 2026-10-02 is a Friday.
+  assert.equal(addWorkingDays(new Date("2026-10-02T10:00:00Z"), 2).toISOString(), "2026-10-06T10:00:00.000Z"); // Tue
+  assert.equal(addWorkingDays(new Date("2026-10-03T10:00:00Z"), 1).toISOString(), "2026-10-05T10:00:00.000Z"); // Sat -> Mon
+  assert.equal(addWorkingDays(new Date("2026-10-05T10:00:00Z"), 5).toISOString(), "2026-10-12T10:00:00.000Z"); // Mon -> next Mon
+  assert.equal(addWorkingDays(new Date("2026-10-02T10:00:00Z"), 0).toISOString(), "2026-10-02T10:00:00.000Z");
 });

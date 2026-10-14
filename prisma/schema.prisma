@@ -59,6 +59,9 @@ model Order {
   factoryName        String
   carrier            String
   shippingService    String
+  // First shipment's tracking; also the key for matching carrier status feeds later.
+  trackingNumber     String?
+  trackingUrl        String?
   orderDate          DateTime
   dispatchDueAt      DateTime
   deliveryDueAt      DateTime
@@ -79,6 +82,7 @@ model Order {
 
   @@unique([storeId, shopifyGid])
   @@index([shopifyOrderId])
+  @@index([trackingNumber])
   @@index([orderDate])
   @@index([status, orderDate])
   @@index([requiresShipping, orderDate])

@@ -221,6 +221,7 @@ export async function getOrders({ search, status, storeId, includeNoShipping, fr
       { customerEmail: { contains: query, mode: "insensitive" } },
       { factoryName: { contains: query, mode: "insensitive" } },
       { carrier: { contains: query, mode: "insensitive" } },
+      { trackingNumber: { contains: query, mode: "insensitive" } },
       { store: { name: { contains: query, mode: "insensitive" } } },
     ] } : {}),
   };

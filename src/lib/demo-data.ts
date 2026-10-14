@@ -10,6 +10,8 @@ export type OrderSummary = {
   factoryName: string;
   carrier: string;
   shippingService: string;
+  trackingNumber: string | null;
+  trackingUrl: string | null;
   orderDate: Date;
   dispatchDueAt: Date;
   deliveryDueAt: Date;
@@ -112,6 +114,8 @@ export const demoOrders: OrderSummary[] = samples.map((sample, index) => {
     factoryName: sample.factory,
     carrier: sample.carrier,
     shippingService: "Standard",
+    trackingNumber: null,
+    trackingUrl: null,
     orderDate,
     dispatchDueAt: dateAt(sample.daysAgo, 2),
     deliveryDueAt: dateAt(sample.daysAgo, 6),
