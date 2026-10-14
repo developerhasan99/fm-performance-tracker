@@ -28,6 +28,9 @@ export async function addStore(_state: ActionResult, formData: FormData): Promis
   const customDomain = customInput ? normalizeCustomDomain(customInput) : null;
   const clientId = field(formData, "clientId");
   const clientSecret = field(formData, "clientSecret");
+  const importInput = field(formData, "importOrdersFrom");
+  // <input type="date"> gives YYYY-MM-DD; stored as midnight UTC.
+  const importOrdersFrom = /^\d{4}-\d{2}-\d{2}$/.test(importInput) ? new Date(`${importInput}T00:00:00Z`) : null;
   const dispatchSlaDays = slaDays(field(formData, "dispatchSlaDays"), 2);
   const deliverySlaDays = slaDays(field(formData, "deliverySlaDays"), 5);
 
@@ -35,11 +38,12 @@ export async function addStore(_state: ActionResult, formData: FormData): Promis
   if (!shopDomain) return fail("Enter the store's myshopify.com domain, e.g. acme.myshopify.com.");
   if (customInput && !customDomain) return fail("Enter the custom domain without a path, e.g. acme.com.");
   if (!/^[a-zA-Z0-9_-]{8,100}$/.test(clientId) || clientSecret.length < 8 || clientSecret.length > 200) return fail("Paste the app's Client ID and Client secret from the Shopify Dev Dashboard.");
+  if (importInput && (!importOrdersFrom || Number.isNaN(importOrdersFrom.getTime()))) return fail("Enter a valid import start date.");
   if (dispatchSlaDays === null || deliverySlaDays === null) return fail("SLA days must be whole numbers between 0 and 60.");
 
   try {
     await getPrisma().shopifyStore.create({
-      data: { name, shopDomain, customDomain, clientId, clientSecret: encrypt(clientSecret), dispatchSlaDays, deliverySlaDays },
+      data: { name, shopDomain, customDomain, clientId, clientSecret: encrypt(clientSecret), importOrdersFrom, dispatchSlaDays, deliverySlaDays },
     });
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") return fail("That store has already been added.");

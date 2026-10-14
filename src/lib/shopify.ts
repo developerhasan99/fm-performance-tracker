@@ -258,8 +258,13 @@ export async function syncStore(storeId: string) {
     let cursor: string | null = null;
     let imported = 0;
     do {
-      const page: OrdersPage = await adminGraphql<OrdersPage>(store.shopDomain, token, ORDERS_QUERY, { cursor, query: `updated_at:>='${since.toISOString()}'` });
-      for (const order of page.orders.nodes) await saveOrder(store, order);
+      const from = store.importOrdersFrom;
+      const query = `updated_at:>='${since.toISOString()}'${from ? ` AND created_at:>='${from.toISOString()}'` : ""}`;
+      const page: OrdersPage = await adminGraphql<OrdersPage>(store.shopDomain, token, ORDERS_QUERY, { cursor, query });
+      for (const order of page.orders.nodes) {
+        // Second guard in case Shopify ever ignores the created_at filter.
+        if (!from || new Date(order.createdAt) >= from) await saveOrder(store, order);
+      }
       imported += page.orders.nodes.length;
       progress.imported = imported;
       cursor = page.orders.pageInfo.hasNextPage ? page.orders.pageInfo.endCursor : null;

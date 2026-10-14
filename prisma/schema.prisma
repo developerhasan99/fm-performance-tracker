@@ -168,6 +168,8 @@ model ShopifyStore {
   accessToken          String?
   accessTokenExpiresAt DateTime?
   refreshToken         String?
+  // Orders created before this are never imported. Null = everything Shopify allows (last 60 days).
+  importOrdersFrom     DateTime?
   dispatchSlaDays      Int       @default(2)
   deliverySlaDays      Int       @default(5)
   // Orders updated after this moment are fetched on the next sync.
