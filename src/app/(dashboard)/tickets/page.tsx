@@ -48,7 +48,7 @@ export default async function TicketsPage({ searchParams }: { searchParams: Prom
   const [tickets, total] = await Promise.all([
     prisma.supportTicket.findMany({
       where,
-      select: { id: true, externalId: true, displayId: true, subject: true, status: true, labels: true, contactReason: true, ticketCreatedAt: true, category: true, refundRequested: true, wismo: true, matchMethod: true, account: { select: { name: true } }, store: { select: { name: true } }, order: { select: { id: true, shopifyOrderId: true } } },
+      select: { id: true, externalId: true, displayId: true, subject: true, status: true, labels: true, contactReason: true, ticketCreatedAt: true, category: true, refundRequested: true, wismo: true, matchMethod: true, subjectNumbers: true, messageNumbers: true, messagesCheckedAt: true, account: { select: { name: true } }, store: { select: { name: true } }, order: { select: { id: true, shopifyOrderId: true } } },
       orderBy: { ticketCreatedAt: "desc" },
       skip: (page - 1) * PAGE_SIZE,
       take: PAGE_SIZE,
@@ -113,7 +113,16 @@ export default async function TicketsPage({ searchParams }: { searchParams: Prom
                     </td>
                     <td><span className={`ticket-status ${ticket.status}`}>{ticket.status}</span></td>
                     <td>{ticket.store?.name ?? <span className="no-contact">—</span>}</td>
-                    <td>{ticket.order ? <Link className="order-reference" href={`/orders/${ticket.order.id}`} title={ticket.matchMethod ?? undefined}>{ticket.order.shopifyOrderId}</Link> : <span className="no-contact">—</span>}</td>
+                    <td>
+                      {ticket.order ? (
+                        <Link className="order-reference" href={`/orders/${ticket.order.id}`} title={ticket.matchMethod ?? undefined}>{ticket.order.shopifyOrderId}</Link>
+                      ) : [...ticket.subjectNumbers, ...ticket.messageNumbers].length ? (
+                        // A number was found but no imported order has it yet; it links on the next sync after its store is imported.
+                        <span className="pending-number" title="No imported order or tracking number matches this yet">{[...ticket.subjectNumbers, ...ticket.messageNumbers][0]} · not imported</span>
+                      ) : (
+                        <span className="no-contact">{ticket.messagesCheckedAt ? "No number found" : "—"}</span>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>

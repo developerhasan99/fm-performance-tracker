@@ -23,6 +23,7 @@ export type OrderSummary = {
   status: FulfillmentStatus;
   isSampleData: boolean;
   requiresShipping: boolean;
+  storeId: string | null;
   store: { name: string; shopDomain: string; customDomain: string | null } | null;
   items: {
     id: string;
@@ -131,6 +132,7 @@ export const demoOrders: OrderSummary[] = samples.map((sample, index) => {
     status: sample.status,
     isSampleData: true,
     requiresShipping: true,
+    storeId: null,
     store: null,
     items: sample.items.map((item, itemIndex) => ({ id: `${sample.reference}-item-${itemIndex}`, sku: item.sku, name: item.name, quantity: item.quantity, shippedQuantity: item.shipped, unitPriceCents: 2400 })),
     contacts: sample.issue ? [{

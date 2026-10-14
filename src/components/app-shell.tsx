@@ -8,20 +8,33 @@ import { logout } from "@/app/login/actions";
 import { TopLoader } from "@/components/top-loader";
 import type { DataSourceStatus } from "@/lib/data-sources";
 
-const navigation = [
-  { href: "/", label: "Overview", icon: LayoutDashboard },
-  { href: "/orders", label: "Orders", icon: ClipboardList },
-  { href: "/tickets", label: "Tickets", icon: LifeBuoy },
-  { href: "/stores", label: "Stores", icon: Store },
-  { href: "/support-accounts", label: "Support", icon: Headset },
-  { href: "/users", label: "Users", icon: Users },
+// Day-to-day reporting vs admin setup. `needsDatabase` items are hidden in sample mode.
+const navigationGroups = [
+  {
+    label: "Workspace",
+    items: [
+      { href: "/", label: "Overview", icon: LayoutDashboard, needsDatabase: false },
+      { href: "/orders", label: "Orders", icon: ClipboardList, needsDatabase: false },
+      { href: "/tickets", label: "Tickets", icon: LifeBuoy, needsDatabase: true },
+    ],
+  },
+  {
+    label: "Management",
+    items: [
+      { href: "/stores", label: "Stores", icon: Store, needsDatabase: true },
+      { href: "/support-accounts", label: "Support", icon: Headset, needsDatabase: true },
+      { href: "/users", label: "Users", icon: Users, needsDatabase: true },
+    ],
+  },
 ];
+const navigation = navigationGroups.flatMap((group) => group.items.map((item) => ({ ...item, group: group.label })));
 
 type ShellUser = { name: string; email: string; role: string };
 
 export function AppShell({ children, isDemoMode, sources, user }: { children: ReactNode; isDemoMode: boolean; sources: DataSourceStatus; user: ShellUser }) {
   const pathname = usePathname();
-  const currentPage = navigation.findLast(({ href }) => href === "/" ? pathname === "/" : pathname.startsWith(href))?.label ?? "Overview";
+  const isActive = (href: string) => (href === "/" ? pathname === "/" : pathname.startsWith(href));
+  const current = navigation.findLast(({ href }) => isActive(href)) ?? navigation[0];
   const sourceCard = (
     <>
       <div className="source-note-label"><span className={`source-dot ${sources.tone}`} />Data sources</div>
@@ -38,14 +51,21 @@ export function AppShell({ children, isDemoMode, sources, user }: { children: Re
           <span className="brand-mark"><PackageCheck size={17} strokeWidth={1.8} /></span>
           <span>parcel</span>
         </Link>
-        <div className="workspace-label">Workspace</div>
-        <nav className="nav-list" aria-label="Main navigation">
-          {navigation.filter(({ href }) => !(isDemoMode && ["/users", "/stores", "/support-accounts", "/tickets"].includes(href))).map(({ href, label, icon: Icon }) => {
-            const active = href === "/" ? pathname === "/" : pathname.startsWith(href);
+        <nav aria-label="Main navigation">
+          {navigationGroups.map((group) => {
+            const items = group.items.filter((item) => !(isDemoMode && item.needsDatabase));
+            if (!items.length) return null;
             return (
-              <Link className={`nav-link${active ? " active" : ""}`} href={href} key={href} aria-current={active ? "page" : undefined}>
-                <Icon size={15} strokeWidth={1.8} />{label}
-              </Link>
+              <div className="nav-group" key={group.label}>
+                <div className="workspace-label" id={`nav-${group.label}`}>{group.label}</div>
+                <div className="nav-list" role="list" aria-labelledby={`nav-${group.label}`}>
+                  {items.map(({ href, label, icon: Icon }) => (
+                    <Link className={`nav-link${isActive(href) ? " active" : ""}`} href={href} key={href} role="listitem" aria-current={isActive(href) ? "page" : undefined}>
+                      <Icon size={15} strokeWidth={1.8} />{label}
+                    </Link>
+                  ))}
+                </div>
+              </div>
             );
           })}
         </nav>
@@ -61,7 +81,7 @@ export function AppShell({ children, isDemoMode, sources, user }: { children: Re
       </aside>
       <div className="main-area">
         <header className="topbar">
-          <div className="breadcrumb">Workspace <span aria-hidden="true">/</span> <strong>{currentPage}</strong></div>
+          <div className="breadcrumb">{current.group} <span aria-hidden="true">/</span> <strong>{current.label}</strong></div>
           <div className="topbar-right"><span className="source-dot" />Operations reporting
             {!isDemoMode && <form action={logout}><button className="secondary-button" type="submit"><LogOut size={12} />Sign out</button></form>}
           </div>
