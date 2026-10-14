@@ -183,3 +183,46 @@ model ShopifyStore {
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt
 }
+
+// A Commslayer workspace connected with an integration token (conversations:read).
+model SupportAccount {
+  id                    String          @id @default(cuid())
+  name                  String
+  // Commslayer's own account id (from GET /account); one connection per Commslayer account.
+  externalAccountId     Int             @unique
+  externalAccountName   String
+  token                 String          // encrypted
+  tokenExpiresAt        DateTime?
+  // Conversations created before this are not imported.
+  importFrom            DateTime
+  lastSyncedAt          DateTime?
+  lastSyncError         String?
+  tickets               SupportTicket[]
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
+}
+
+// One Commslayer conversation. Matching to orders comes later; `raw` keeps the full API response for analysis.
+model SupportTicket {
+  id               String         @id @default(cuid())
+  accountId        String
+  account          SupportAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  externalId       Int
+  displayId        Int?
+  status           String
+  subject          String?
+  inboxId          Int?
+  contactId        Int?
+  labels           String[]
+  contactReason    String?
+  contactReasonId  Int?
+  ticketCreatedAt  DateTime
+  ticketUpdatedAt  DateTime?
+  lastActivityAt   DateTime?
+  raw              Json
+  importedAt       DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  @@unique([accountId, externalId])
+  @@index([ticketCreatedAt])
+}

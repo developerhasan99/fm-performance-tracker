@@ -1,5 +1,6 @@
 import { isDemoMode } from "@/lib/auth";
 import { getPrisma } from "@/lib/prisma";
+import { getSupportSyncProgress } from "@/lib/commslayer";
 import { getSyncProgress } from "@/lib/shopify";
 
 export type DataSourceStatus = { tone: "ok" | "syncing" | "warn" | "error" | "idle"; lines: string[] };
@@ -18,9 +19,17 @@ const plural = (count: number, word: string) => `${count} ${word}${count === 1 ?
 export async function getDataSourceStatus(): Promise<DataSourceStatus> {
   if (isDemoMode()) return { tone: "idle", lines: ["Sample preview · No database required"] };
 
-  const stores = await getPrisma().shopifyStore.findMany({ select: { id: true, accessToken: true, lastSyncedAt: true, lastSyncError: true } });
+  const [stores, supportAccounts] = await Promise.all([
+    getPrisma().shopifyStore.findMany({ select: { id: true, accessToken: true, lastSyncedAt: true, lastSyncError: true } }),
+    getPrisma().supportAccount.findMany({ select: { id: true, lastSyncError: true } }),
+  ]);
+  const supportFailing = supportAccounts.filter((account) => account.lastSyncError).length;
+  const support = !supportAccounts.length ? "Support · Not connected"
+    : supportAccounts.some((account) => getSupportSyncProgress(account.id)) ? "Support · Syncing…"
+    : supportFailing ? `Support · ${plural(supportFailing, "account")} need${supportFailing === 1 ? "s" : ""} attention`
+    : `Support · ${plural(supportAccounts.length, "account")} connected`;
   const carriers = "Carrier tracking · Not connected";
-  if (!stores.length) return { tone: "warn", lines: ["Shopify · No stores added", carriers] };
+  if (!stores.length) return { tone: "warn", lines: ["Shopify · No stores added", support, carriers] };
 
   const connected = stores.filter((store) => store.accessToken);
   const syncing = connected.filter((store) => getSyncProgress(store.id)).length;
@@ -32,6 +41,6 @@ export async function getDataSourceStatus(): Promise<DataSourceStatus> {
     : failing ? `${plural(failing, "store")} need${failing === 1 ? "s" : ""} attention`
     : lastSync ? `Last sync ${timeAgo(lastSync)}`
     : "Waiting for first sync";
-  const tone = failing || connected.length < stores.length ? "error" : syncing ? "syncing" : lastSync ? "ok" : "warn";
-  return { tone, lines: [shopify, activity, carriers] };
+  const tone = failing || supportFailing || connected.length < stores.length ? "error" : syncing ? "syncing" : lastSync ? "ok" : "warn";
+  return { tone, lines: [shopify, activity, support, carriers] };
 }
