@@ -7,6 +7,7 @@ import { requireAdmin } from "@/lib/auth";
 import { getSupportSyncProgress, inspectToken, syncSupportAccount } from "@/lib/commslayer";
 import { encrypt } from "@/lib/encryption";
 import { getPrisma } from "@/lib/prisma";
+import { linkTickets } from "@/lib/support-matching";
 
 const field = (formData: FormData, name: string) => String(formData.get(name) ?? "").trim();
 const fail = (message: string): ActionResult => ({ ok: false, message });
@@ -65,4 +66,22 @@ export async function deleteSupportAccount(_state: ActionResult, formData: FormD
   await getPrisma().supportAccount.deleteMany({ where: { id: field(formData, "accountId") } });
   revalidatePath("/support-accounts");
   return { ok: true, message: "Account and its imported tickets deleted." };
+}
+
+export async function setInboxStore(_state: ActionResult, formData: FormData): Promise<ActionResult> {
+  await requireAdmin();
+  const accountId = field(formData, "accountId");
+  const externalInboxId = Number(field(formData, "inboxId"));
+  const storeInput = field(formData, "storeId");
+  if (!Number.isInteger(externalInboxId)) return fail("Unknown inbox.");
+  const storeId = storeInput ? (await getPrisma().shopifyStore.findUnique({ where: { id: storeInput }, select: { id: true } }))?.id : null;
+  if (storeInput && !storeId) return fail("Store not found.");
+  await getPrisma().supportInbox.upsert({
+    where: { accountId_externalInboxId: { accountId, externalInboxId } },
+    create: { accountId, externalInboxId, storeId },
+    update: { storeId },
+  });
+  await linkTickets(); // applies the store to this inbox's unlinked tickets
+  revalidatePath("/support-accounts");
+  return { ok: true, message: "Saved." };
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { ClipboardList, Headset, LayoutDashboard, LogOut, PackageCheck, Store, Users } from "lucide-react";
+import { ClipboardList, Headset, LayoutDashboard, LifeBuoy, LogOut, PackageCheck, Store, Users } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Suspense, type ReactNode } from "react";
@@ -11,6 +11,7 @@ import type { DataSourceStatus } from "@/lib/data-sources";
 const navigation = [
   { href: "/", label: "Overview", icon: LayoutDashboard },
   { href: "/orders", label: "Orders", icon: ClipboardList },
+  { href: "/tickets", label: "Tickets", icon: LifeBuoy },
   { href: "/stores", label: "Stores", icon: Store },
   { href: "/support-accounts", label: "Support", icon: Headset },
   { href: "/users", label: "Users", icon: Users },
@@ -39,7 +40,7 @@ export function AppShell({ children, isDemoMode, sources, user }: { children: Re
         </Link>
         <div className="workspace-label">Workspace</div>
         <nav className="nav-list" aria-label="Main navigation">
-          {navigation.filter(({ href }) => !(isDemoMode && ["/users", "/stores", "/support-accounts"].includes(href))).map(({ href, label, icon: Icon }) => {
+          {navigation.filter(({ href }) => !(isDemoMode && ["/users", "/stores", "/support-accounts", "/tickets"].includes(href))).map(({ href, label, icon: Icon }) => {
             const active = href === "/" ? pathname === "/" : pathname.startsWith(href);
             return (
               <Link className={`nav-link${active ? " active" : ""}`} href={href} key={href} aria-current={active ? "page" : undefined}>

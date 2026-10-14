@@ -7,7 +7,37 @@ const orderInclude = {
   contacts: true,
   store: { select: { name: true, shopDomain: true, customDomain: true } },
   events: { orderBy: { occurredAt: "asc" as const } },
+  tickets: {
+    where: { excluded: false },
+    select: { id: true, category: true, status: true, subject: true, wismo: true, refundRequested: true, ticketCreatedAt: true },
+    orderBy: { ticketCreatedAt: "asc" as const },
+  },
 } satisfies Prisma.OrderInclude;
+
+type OrderRow = Prisma.OrderGetPayload<{ include: typeof orderInclude }>;
+
+/** Commslayer tickets count as support contacts everywhere contacts are used (metrics, tables, order page). */
+function toSummary({ tickets, ...order }: OrderRow): OrderSummary {
+  return {
+    ...order,
+    contacts: [
+      ...order.contacts,
+      ...tickets.map((ticket) => ({
+        id: ticket.id,
+        category: ticket.category ?? "other",
+        resolution: ticket.status,
+        channel: "commslayer",
+        contactedAt: ticket.ticketCreatedAt,
+        refundAmountCents: 0,
+        replacementCostCents: 0,
+        handlingMinutes: 0,
+        subject: ticket.subject,
+        wismo: ticket.wismo,
+        refundRequested: ticket.refundRequested,
+      })),
+    ],
+  };
+}
 
 const isDemoMode = () => process.env.DASHBOARD_DEMO_MODE === "true";
 
@@ -22,7 +52,7 @@ async function allOrders(): Promise<OrderSummary[]> {
     },
     include: orderInclude,
     orderBy: { orderDate: "desc" },
-  });
+  }).then((orders) => orders.map(toSummary));
 }
 
 export const statusLabels: Record<FulfillmentStatus, string> = {
@@ -230,7 +260,7 @@ export async function getOrders({ search, status, storeId, includeNoShipping, fr
     prisma.order.findMany({ where, include: orderInclude, orderBy: [{ orderDate: "desc" }, { id: "desc" }], skip, take: ORDERS_PAGE_SIZE }),
     prisma.order.count({ where }),
   ]);
-  return { orders, total };
+  return { orders: orders.map(toSummary), total };
 }
 
 export async function getStoreOptions() {
@@ -240,8 +270,6 @@ export async function getStoreOptions() {
 
 export async function getOrderById(id: string) {
   if (isDemoMode()) return demoOrders.find((order) => order.id === id) ?? null;
-  return getPrisma().order.findUnique({
-    where: { id },
-    include: orderInclude,
-  });
+  const order = await getPrisma().order.findUnique({ where: { id }, include: orderInclude });
+  return order && toSummary(order);
 }

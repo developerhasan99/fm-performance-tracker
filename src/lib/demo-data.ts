@@ -41,6 +41,10 @@ export type OrderSummary = {
     refundAmountCents: number;
     replacementCostCents: number;
     handlingMinutes: number;
+    // Set for Commslayer tickets.
+    subject?: string | null;
+    wismo?: boolean;
+    refundRequested?: boolean;
   }[];
   events: {
     id: string;

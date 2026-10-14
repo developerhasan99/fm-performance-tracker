@@ -2,6 +2,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import type { FulfillmentStatus, ShopifyStore } from "@prisma/client";
 import { decrypt, encrypt } from "@/lib/encryption";
 import { getPrisma } from "@/lib/prisma";
+import { linkTickets } from "@/lib/support-matching";
 
 export const SHOPIFY_API_VERSION = "2026-10";
 // read_orders only reaches the last 60 days; older orders need read_all_orders, which Shopify must approve.
@@ -293,6 +294,8 @@ export async function syncStore(storeId: string) {
       cursor = page.orders.pageInfo.hasNextPage ? page.orders.pageInfo.endCursor : null;
     } while (cursor);
     await prisma.shopifyStore.update({ where: { id: storeId }, data: { lastSyncedAt: startedAt, lastSyncError: null } });
+    // New orders may be what waiting support tickets refer to.
+    await linkTickets();
     return { imported, skipped: false };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
