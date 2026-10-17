@@ -59,7 +59,7 @@ model Order {
   factoryName        String
   carrier            String
   shippingService    String
-  // First shipment's tracking; also the key for matching carrier status feeds later.
+  // First shipment's tracking, from Shopify.
   trackingNumber     String?
   trackingUrl        String?
   orderDate          DateTime

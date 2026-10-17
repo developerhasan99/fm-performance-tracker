@@ -28,8 +28,7 @@ export async function getDataSourceStatus(): Promise<DataSourceStatus> {
     : supportAccounts.some((account) => getSupportSyncProgress(account.id)) ? "Support · Syncing…"
     : supportFailing ? `Support · ${plural(supportFailing, "account")} need${supportFailing === 1 ? "s" : ""} attention`
     : `Support · ${plural(supportAccounts.length, "account")} connected`;
-  const carriers = "Carrier tracking · Not connected";
-  if (!stores.length) return { tone: "warn", lines: ["Shopify · No stores added", support, carriers] };
+  if (!stores.length) return { tone: "warn", lines: ["Shopify · No stores added", support] };
 
   const connected = stores.filter((store) => store.accessToken);
   const syncing = connected.filter((store) => getSyncProgress(store.id)).length;
@@ -42,5 +41,5 @@ export async function getDataSourceStatus(): Promise<DataSourceStatus> {
     : lastSync ? `Last sync ${timeAgo(lastSync)}`
     : "Waiting for first sync";
   const tone = failing || supportFailing || connected.length < stores.length ? "error" : syncing ? "syncing" : lastSync ? "ok" : "warn";
-  return { tone, lines: [shopify, activity, support, carriers] };
+  return { tone, lines: [shopify, activity, support] };
 }

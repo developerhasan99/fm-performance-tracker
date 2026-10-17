@@ -2,49 +2,28 @@ import type { Metadata } from "next";
 import Form from "next/form";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import type { Prisma } from "@prisma/client";
-import { ChevronLeft, ChevronRight, Search } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, Search } from "lucide-react";
 import { isDemoMode, requireUser } from "@/lib/auth";
 import { formatDate, issueLabels } from "@/lib/dashboard";
 import { getPrisma } from "@/lib/prisma";
+import { parseTicketParams, ticketStatuses as statuses, type TicketParams } from "@/lib/tickets";
 
 export const metadata: Metadata = { title: "Tickets" };
 export const dynamic = "force-dynamic";
 
 const PAGE_SIZE = 50;
-const statuses = ["open", "pending", "snoozed", "resolved", "merged"];
 
-export default async function TicketsPage({ searchParams }: { searchParams: Promise<{ q?: string; status?: string; account?: string; store?: string; link?: string; all?: string; page?: string }> }) {
+export default async function TicketsPage({ searchParams }: { searchParams: Promise<TicketParams & { page?: string }> }) {
   if (isDemoMode()) redirect("/");
   await requireUser();
   const params = await searchParams;
-  const query = params.q?.trim() ?? "";
-  const status = statuses.find((item) => item === params.status);
-  const showAll = params.all === "1";
   const page = Math.max(1, Math.floor(Number(params.page)) || 1);
   const prisma = getPrisma();
   const [accounts, stores] = await Promise.all([
     prisma.supportAccount.findMany({ select: { id: true, name: true }, orderBy: { name: "asc" } }),
     prisma.shopifyStore.findMany({ select: { id: true, name: true }, orderBy: { name: "asc" } }),
   ]);
-  const accountId = accounts.find((account) => account.id === params.account)?.id;
-  const storeId = stores.find((store) => store.id === params.store)?.id;
-  const link = params.link === "linked" || params.link === "unlinked" ? params.link : undefined;
-
-  const where: Prisma.SupportTicketWhereInput = {
-    ...(accountId && { accountId }),
-    ...(storeId && { storeId }),
-    ...(link && { orderId: link === "linked" ? { not: null } : null }),
-    ...(status ? { status } : showAll ? {} : { status: { not: "merged" } }),
-    // Spam is hidden unless "Include spam & merged" is ticked.
-    ...(!showAll && { NOT: { raw: { path: ["spam"], equals: true } } }),
-    ...(query && { OR: [
-      { subject: { contains: query, mode: "insensitive" } },
-      { contactReason: { contains: query, mode: "insensitive" } },
-      { labels: { has: query.toLowerCase() } },
-      ...(/^\d+$/.test(query) ? [{ externalId: Number(query) }, { displayId: Number(query) }] : []),
-    ] }),
-  };
+  const { query, status, showAll, accountId, storeId, link, where, search } = parseTicketParams(params, accounts, stores);
   const [tickets, total] = await Promise.all([
     prisma.supportTicket.findMany({
       where,
@@ -57,15 +36,22 @@ export default async function TicketsPage({ searchParams }: { searchParams: Prom
   ]);
   const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const pageHref = (target: number) => {
-    const search = new URLSearchParams({ ...(query && { q: query }), ...(status && { status }), ...(accountId && { account: accountId }), ...(storeId && { store: storeId }), ...(link && { link }), ...(showAll && { all: "1" }), ...(target > 1 && { page: String(target) }) });
-    return `/tickets${search.size ? `?${search}` : ""}`;
+    const pageSearch = new URLSearchParams(search);
+    if (target > 1) pageSearch.set("page", String(target));
+    return `/tickets${pageSearch.size ? `?${pageSearch}` : ""}`;
   };
   const first = total ? (page - 1) * PAGE_SIZE + 1 : 0;
 
   return (
     <>
-      <div className="page-heading"><div><p className="eyebrow">Customer support</p><h1>Tickets</h1><p className="page-subtitle">Commslayer conversations, linked to an order when they mention its order or tracking number.</p></div></div>
-      <Form className="orders-toolbar" action="/tickets" key={`${query}|${status}|${accountId}|${storeId}|${link}|${showAll}`}>
+      <div className="page-heading"><div><p className="eyebrow">Customer support</p><h1>Tickets</h1><p className="page-subtitle">Commslayer conversations, linked to an order when they mention its order or tracking number.</p></div>
+        <div className="heading-controls">
+          <span className="results-count">{total.toLocaleString("en-GB")} {total === 1 ? "ticket" : "tickets"}{(query || status || accountId || storeId || link || showAll) && <> · <Link className="clear-link" href="/tickets">Clear filters</Link></>}</span>
+          {total > 0 && <a className="secondary-button" href={`/tickets/export${search.size ? `?${search}` : ""}`} download title="Download every ticket matching the applied filters"><Download size={13} />Export CSV</a>}
+        </div>
+      </div>
+      <section className="panel table-panel">
+      <Form className="filter-bar" action="/tickets" key={`${query}|${status}|${accountId}|${storeId}|${link}|${showAll}`}>
         <label className="search-field"><Search size={14} /><input name="q" type="search" placeholder="Search subject, reason, label or ticket #" defaultValue={query} aria-label="Search tickets" /></label>
         <select className="filter-select" name="status" defaultValue={status ?? ""} aria-label="Filter by ticket status">
           <option value="">All statuses</option>
@@ -88,12 +74,9 @@ export default async function TicketsPage({ searchParams }: { searchParams: Prom
           <option value="linked">Linked to an order</option>
           <option value="unlinked">Not linked</option>
         </select>
-        <label className="date-field"><input type="checkbox" name="all" value="1" defaultChecked={showAll} />Include spam &amp; merged</label>
-        <button className="search-button" type="submit">Apply</button>
-        {(query || status || accountId || storeId || link || showAll) && <Link className="secondary-button" href="/tickets">Clear</Link>}
-        <span className="results-count">{total} {total === 1 ? "ticket" : "tickets"}</span>
+        <label className="check-chip"><input type="checkbox" name="all" value="1" defaultChecked={showAll} />Spam &amp; merged</label>
+        <button className="search-button filter-apply" type="submit">Apply</button>
       </Form>
-      <section className="panel table-panel">
         {tickets.length ? (
           <div className="table-scroll">
             <table className="data-table">

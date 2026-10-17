@@ -117,7 +117,7 @@ export default async function OverviewPage({ searchParams }: { searchParams: Pro
         <MetricCard title="Delivered on time" value={pct(metrics.onTimeDeliveryRate)} footnote={`OTIF ${pct(metrics.otifRate)} · of confirmed deliveries`} icon={Route} />
         <MetricCard title="Median transit time" value={days1(metrics.medianTransitDays)} footnote="Hand-over to confirmed delivery" icon={Hourglass} />
       </div>
-      {metrics.deliveryCoverage !== null && metrics.deliveryCoverage < 50 && <p className="panel-note section-note">Carriers have confirmed only {pct(metrics.deliveryCoverage)} of deliveries, so on-time, OTIF and transit time cover few orders. A carrier status feed (such as DPD&apos;s) will fill these in.</p>}
+      {metrics.deliveryCoverage !== null && metrics.deliveryCoverage < 50 && <p className="panel-note section-note">Carriers have confirmed only {pct(metrics.deliveryCoverage)} of deliveries, so on-time, OTIF and transit time cover few orders. Delivery dates come from Shopify, so they only appear when the store&apos;s shipping app marks orders delivered.</p>}
       <section className="panel table-panel">
         <div className="panel-heading"><div><h2 className="panel-title">By carrier</h2><p className="panel-description">Orders shipped this period</p></div></div>
         {overview.carrierRows.length ? (

@@ -82,7 +82,7 @@ export function AppShell({ children, isDemoMode, sources, user }: { children: Re
       <div className="main-area">
         <header className="topbar">
           <div className="breadcrumb">{current.group} <span aria-hidden="true">/</span> <strong>{current.label}</strong></div>
-          <div className="topbar-right"><span className="source-dot" />Operations reporting
+          <div className="topbar-right">
             {!isDemoMode && <form action={logout}><button className="secondary-button" type="submit"><LogOut size={12} />Sign out</button></form>}
           </div>
         </header>

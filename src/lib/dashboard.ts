@@ -90,12 +90,45 @@ export type OrderFilters = {
   /** Order date range: from is inclusive, before is exclusive. */
   from?: Date;
   before?: Date;
-  page: number;
+  /** 1-based; omit for every matching order (export). */
+  page?: number;
 };
 
-/** One page of orders (1-based) plus the total match count. */
+export const orderStatuses: FulfillmentStatus[] = ["placed", "processing", "in_transit", "delivered", "completed", "delayed", "cancelled"];
+
+// "YYYY-MM-DD" from <input type="date">, or undefined if missing/invalid.
+// ponytail: days are UTC, so UK summer time shifts the boundary by an hour; use the shop's timezone if that matters.
+const parseDay = (value?: string) => (value && /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(value)) ? value : undefined);
+
+export type OrderParams = { q?: string; status?: string; store?: string; noShipping?: string; from?: string; to?: string };
+
+/** Validated filters from the orders URL, shared by the list and its CSV export. `search` holds them without the page. */
+export function parseOrderParams(params: OrderParams, stores: { id: string }[]) {
+  const query = params.q?.trim() ?? "";
+  const status = orderStatuses.find((candidate) => candidate === params.status);
+  const storeId = stores.find((store) => store.id === params.store)?.id;
+  const noShipping = params.noShipping === "1";
+  const from = parseDay(params.from);
+  const to = parseDay(params.to);
+  return {
+    query, status, storeId, noShipping, from, to,
+    filters: {
+      search: query,
+      status,
+      storeId,
+      // "Completed" only exists for no-shipping orders, so choosing it implies showing them.
+      includeNoShipping: noShipping || status === "completed",
+      from: from ? new Date(`${from}T00:00:00Z`) : undefined,
+      before: to ? new Date(Date.parse(`${to}T00:00:00Z`) + 24 * 60 * 60 * 1000) : undefined,
+    } satisfies OrderFilters,
+    search: new URLSearchParams({ ...(query && { q: query }), ...(status && { status }), ...(storeId && { store: storeId }), ...(noShipping && { noShipping: "1" }), ...(from && { from }), ...(to && { to }) }),
+  };
+}
+
+/** One page of orders plus the total match count, or every match when no page is given. */
 export async function getOrders({ search, status, storeId, includeNoShipping, from, before, page }: OrderFilters) {
-  const skip = (page - 1) * ORDERS_PAGE_SIZE;
+  const skip = page ? (page - 1) * ORDERS_PAGE_SIZE : 0;
+  const take = page ? ORDERS_PAGE_SIZE : undefined;
   if (isDemoMode()) {
     const query = search.trim().toLowerCase();
     const matches = demoOrders.filter((order) => {
@@ -104,7 +137,7 @@ export async function getOrders({ search, status, storeId, includeNoShipping, fr
       ].some((value) => value.toLowerCase().includes(query));
       return matchesSearch && (!status || order.status === status) && !storeId && (includeNoShipping || order.requiresShipping) && (!from || order.orderDate >= from) && (!before || order.orderDate < before);
     });
-    return { orders: matches.slice(skip, skip + ORDERS_PAGE_SIZE), total: matches.length };
+    return { orders: take ? matches.slice(skip, skip + take) : matches, total: matches.length };
   }
 
   const query = search.trim();
@@ -125,7 +158,7 @@ export async function getOrders({ search, status, storeId, includeNoShipping, fr
   };
   const prisma = getPrisma();
   const [orders, total] = await Promise.all([
-    prisma.order.findMany({ where, include: orderInclude, orderBy: [{ orderDate: "desc" }, { id: "desc" }], skip, take: ORDERS_PAGE_SIZE }),
+    prisma.order.findMany({ where, include: orderInclude, orderBy: [{ orderDate: "desc" }, { id: "desc" }], skip, take }),
     prisma.order.count({ where }),
   ]);
   return { orders: orders.map(toSummary), total };

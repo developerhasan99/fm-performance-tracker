@@ -190,7 +190,7 @@ export function mapShopifyOrder(order: ShopifyOrder, sla: { dispatchSlaDays: num
   const fulfillments = order.fulfillments.filter((fulfillment) => fulfillment.status === "SUCCESS");
   // Only fulfillments with physical items involve a carrier; digital ones never get a delivered date.
   const shipments = fulfillments.filter((fulfillment) => fulfillment.requiresShipping);
-  // ponytail: fulfillment creation is treated as carrier collection; swap in carrier scan events once a carrier feed exists.
+  // Carrier data comes only from Shopify: fulfillment creation stands in for carrier collection.
   const carrierCollectedAt = earliest(shipments.map((fulfillment) => new Date(fulfillment.createdAt)));
   const allFulfilled = lines.length > 0 && lines.every((item) => item.unfulfilledQuantity === 0);
   const allShippableSent = lines.filter((item) => item.requiresShipping).every((item) => item.unfulfilledQuantity === 0);
