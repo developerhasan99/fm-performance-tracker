@@ -23,7 +23,7 @@ export default async function TicketsPage({ searchParams }: { searchParams: Prom
     prisma.supportAccount.findMany({ select: { id: true, name: true }, orderBy: { name: "asc" } }),
     prisma.shopifyStore.findMany({ select: { id: true, name: true }, orderBy: { name: "asc" } }),
   ]);
-  const { query, status, showAll, accountId, storeId, link, where, search } = parseTicketParams(params, accounts, stores);
+  const { query, status, showAll, accountId, storeId, link, category, where, search } = parseTicketParams(params, accounts, stores);
   const [tickets, total] = await Promise.all([
     prisma.supportTicket.findMany({
       where,
@@ -46,12 +46,12 @@ export default async function TicketsPage({ searchParams }: { searchParams: Prom
     <>
       <div className="page-heading"><div><p className="eyebrow">Customer support</p><h1>Tickets</h1><p className="page-subtitle">Commslayer conversations, linked to an order when they mention its order or tracking number.</p></div>
         <div className="heading-controls">
-          <span className="results-count">{total.toLocaleString("en-GB")} {total === 1 ? "ticket" : "tickets"}{(query || status || accountId || storeId || link || showAll) && <> · <Link className="clear-link" href="/tickets">Clear filters</Link></>}</span>
+          <span className="results-count">{total.toLocaleString("en-GB")} {total === 1 ? "ticket" : "tickets"}{(query || status || accountId || storeId || link || showAll || category) && <> · <Link className="clear-link" href="/tickets">Clear filters</Link></>}</span>
           {total > 0 && <a className="secondary-button" href={`/tickets/export${search.size ? `?${search}` : ""}`} download title="Download every ticket matching the applied filters"><Download size={13} />Export CSV</a>}
         </div>
       </div>
       <section className="panel table-panel">
-      <Form className="filter-bar" action="/tickets" key={`${query}|${status}|${accountId}|${storeId}|${link}|${showAll}`}>
+      <Form className="filter-bar" action="/tickets" key={search.toString()}>
         <label className="search-field"><Search size={14} /><input name="q" type="search" placeholder="Search subject, reason, label or ticket #" defaultValue={query} aria-label="Search tickets" /></label>
         <select className="filter-select" name="status" defaultValue={status ?? ""} aria-label="Filter by ticket status">
           <option value="">All statuses</option>
@@ -69,6 +69,11 @@ export default async function TicketsPage({ searchParams }: { searchParams: Prom
             {stores.map((store) => <option key={store.id} value={store.id}>{store.name}</option>)}
           </select>
         )}
+        <select className="filter-select" name="category" defaultValue={category ?? ""} aria-label="Filter by category">
+          <option value="">All categories</option>
+          {Object.entries(issueLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+          <option value="none">General enquiry</option>
+        </select>
         <select className="filter-select" name="link" defaultValue={link ?? ""} aria-label="Filter by order link">
           <option value="">Linked &amp; unlinked</option>
           <option value="linked">Linked to an order</option>

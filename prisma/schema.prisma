@@ -45,41 +45,67 @@ enum EventSource {
 }
 
 model Order {
-  id                 String             @id @default(cuid())
+  id                  String             @id @default(cuid())
   // Shopify order name, e.g. "#1001". Only unique within a store.
-  shopifyOrderId     String
+  shopifyOrderId      String
   // Shopify GID (gid://shopify/Order/123). With storeId, this is the import dedup key.
-  shopifyGid         String?
-  storeId            String?
-  store              ShopifyStore?      @relation(fields: [storeId], references: [id], onDelete: Restrict)
-  customerName       String
-  customerEmail      String
-  market             String             @default("UK")
-  currency           String             @default("GBP")
-  factoryName        String
-  carrier            String
-  shippingService    String
+  shopifyGid          String?
+  storeId             String?
+  store               ShopifyStore?      @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  customerName        String
+  customerEmail       String
+  market              String             @default("UK")
+  currency            String             @default("GBP")
+  factoryName         String
+  carrier             String
+  shippingService     String
   // First shipment's tracking, from Shopify.
-  trackingNumber     String?
-  trackingUrl        String?
-  orderDate          DateTime
-  dispatchDueAt      DateTime
-  deliveryDueAt      DateTime
-  factoryReceivedAt  DateTime?
-  pickedAt           DateTime?
-  packedAt           DateTime?
-  carrierCollectedAt DateTime?
-  deliveredAt        DateTime?
-  status             FulfillmentStatus  @default(placed)
-  isSampleData       Boolean            @default(false)
+  trackingNumber      String?
+  trackingUrl         String?
+  orderDate           DateTime
+  dispatchDueAt       DateTime
+  deliveryDueAt       DateTime
+  factoryReceivedAt   DateTime?
+  pickedAt            DateTime?
+  packedAt            DateTime?
+  carrierCollectedAt  DateTime?
+  deliveredAt         DateTime?
+  status              FulfillmentStatus  @default(placed)
+  isSampleData        Boolean            @default(false)
   // False when no item needs shipping (digital products, memberships). Hidden from lists and metrics by default.
-  requiresShipping   Boolean            @default(true)
-  items              OrderItem[]
-  contacts           SupportContact[]
-  events             FulfillmentEvent[]
-  tickets            SupportTicket[]
-  createdAt          DateTime           @default(now())
-  updatedAt          DateTime           @updatedAt
+  requiresShipping    Boolean            @default(true)
+  // Money, in the shop's currency (`currency`). eurRate converts it: 1 unit = eurRate EUR, ECB rate on the order date.
+  totalCents          Int                @default(0)
+  refundedCents       Int                @default(0)
+  refundCount         Int                @default(0)
+  firstRefundAt       DateTime?
+  eurRate             Float?
+  cancelReason        String?
+  cancelledAt         DateTime?
+  financialStatus     String?
+  tags                String[]
+  // Shopify Payments disputes: all chargebacks, and those lost or accepted (money gone).
+  chargebacks         Int                @default(0)
+  chargebacksLost     Int                @default(0)
+  // A free/tagged order sent to make up for an earlier one (see shopify.ts), and the order it replaces.
+  isReplacement       Boolean            @default(false)
+  replacementForId    String?
+  replacementFor      Order?             @relation("Replacement", fields: [replacementForId], references: [id], onDelete: SetNull)
+  replacements        Order[]            @relation("Replacement")
+  // Cost of failure in EUR cents and its root cause; recomputed by failure.ts after every sync.
+  failureCause        String?
+  refundCostCents     Int                @default(0)
+  chargebackCostCents Int                @default(0)
+  reshipCostCents     Int                @default(0)
+  supportCostCents    Int                @default(0)
+  lostRevenueCents    Int                @default(0)
+  failureCostCents    Int                @default(0)
+  items               OrderItem[]
+  contacts            SupportContact[]
+  events              FulfillmentEvent[]
+  tickets             SupportTicket[]
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
 
   @@unique([storeId, shopifyGid])
   @@index([shopifyOrderId])
@@ -89,6 +115,8 @@ model Order {
   @@index([requiresShipping, orderDate])
   @@index([factoryName, orderDate])
   @@index([carrier, orderDate])
+  @@index([failureCause, orderDate])
+  @@index([replacementForId])
 }
 
 model OrderItem {
@@ -161,10 +189,10 @@ model Session {
 }
 
 model ShopifyStore {
-  id                   String    @id @default(cuid())
+  id                   String          @id @default(cuid())
   name                 String
   // Permanent store address, e.g. "acme.myshopify.com". Used for all API calls.
-  shopDomain           String    @unique
+  shopDomain           String          @unique
   // Public storefront domain, e.g. "acme.com". Display only.
   customDomain         String?
   // Credentials of the store's custom-distribution app (Shopify Dev Dashboard). Secrets are encrypted.
@@ -175,72 +203,76 @@ model ShopifyStore {
   refreshToken         String?
   // Orders created before this are never imported. Null = everything Shopify allows (last 60 days).
   importOrdersFrom     DateTime?
-  dispatchSlaDays      Int       @default(2)
-  deliverySlaDays      Int       @default(5)
+  dispatchSlaDays      Int             @default(2)
+  deliverySlaDays      Int             @default(5)
+  // Cost-of-failure assumptions, EUR cents: one reshipment (product + postage), the fee per chargeback, handling one ticket.
+  reshipCostCents      Int             @default(1000)
+  chargebackFeeCents   Int             @default(1500)
+  ticketCostCents      Int             @default(200)
   // Orders updated after this moment are fetched on the next sync.
   lastSyncedAt         DateTime?
   lastSyncError        String?
   orders               Order[]
   tickets              SupportTicket[]
   inboxes              SupportInbox[]
-  createdAt            DateTime  @default(now())
-  updatedAt            DateTime  @updatedAt
+  createdAt            DateTime        @default(now())
+  updatedAt            DateTime        @updatedAt
 }
 
 // A Commslayer workspace connected with an integration token (conversations:read).
 model SupportAccount {
-  id                    String          @id @default(cuid())
-  name                  String
+  id                  String          @id @default(cuid())
+  name                String
   // Commslayer's own account id (from GET /account); one connection per Commslayer account.
-  externalAccountId     Int             @unique
-  externalAccountName   String
-  token                 String          // encrypted
-  tokenExpiresAt        DateTime?
+  externalAccountId   Int             @unique
+  externalAccountName String
+  token               String // encrypted
+  tokenExpiresAt      DateTime?
   // Conversations created before this are not imported.
-  importFrom            DateTime
-  lastSyncedAt          DateTime?
-  lastSyncError         String?
-  tickets               SupportTicket[]
-  inboxes               SupportInbox[]
-  createdAt             DateTime        @default(now())
-  updatedAt             DateTime        @updatedAt
+  importFrom          DateTime
+  lastSyncedAt        DateTime?
+  lastSyncError       String?
+  tickets             SupportTicket[]
+  inboxes             SupportInbox[]
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
 }
 
 // One Commslayer conversation. Matching to orders comes later; `raw` keeps the full API response for analysis.
 model SupportTicket {
-  id               String         @id @default(cuid())
-  accountId        String
-  account          SupportAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
-  externalId       Int
-  displayId        Int?
-  status           String
-  subject          String?
-  inboxId          Int?
-  contactId        Int?
-  labels           String[]
-  contactReason    String?
-  contactReasonId  Int?
-  ticketCreatedAt  DateTime
-  ticketUpdatedAt  DateTime?
-  lastActivityAt   DateTime?
-  raw              Json
+  id                String         @id @default(cuid())
+  accountId         String
+  account           SupportAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  externalId        Int
+  displayId         Int?
+  status            String
+  subject           String?
+  inboxId           Int?
+  contactId         Int?
+  labels            String[]
+  contactReason     String?
+  contactReasonId   Int?
+  ticketCreatedAt   DateTime
+  ticketUpdatedAt   DateTime?
+  lastActivityAt    DateTime?
+  raw               Json
   // Spam, merged, review/system notifications: kept for analysis, left out of metrics and matching.
-  excluded         Boolean        @default(false)
-  category         IssueCategory?
-  refundRequested  Boolean        @default(false)
-  wismo            Boolean        @default(false)
+  excluded          Boolean        @default(false)
+  category          IssueCategory?
+  refundRequested   Boolean        @default(false)
+  wismo             Boolean        @default(false)
   // 6+ digit numbers found in the subject (recomputed every sync) and in the customer's messages (fetched once).
-  subjectNumbers   String[]
-  messageNumbers   String[]
+  subjectNumbers    String[]
+  messageNumbers    String[]
   messagesCheckedAt DateTime?
   // Set by matching: the order a number pointed to, and the store (from the order, else the inbox mapping).
-  orderId          String?
-  order            Order?         @relation(fields: [orderId], references: [id], onDelete: SetNull)
-  storeId          String?
-  store            ShopifyStore?  @relation(fields: [storeId], references: [id], onDelete: SetNull)
-  matchMethod      String?
-  importedAt       DateTime       @default(now())
-  updatedAt        DateTime       @updatedAt
+  orderId           String?
+  order             Order?         @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  storeId           String?
+  store             ShopifyStore?  @relation(fields: [storeId], references: [id], onDelete: SetNull)
+  matchMethod       String?
+  importedAt        DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
 
   @@unique([accountId, externalId])
   @@index([ticketCreatedAt])

@@ -23,6 +23,21 @@ export type OrderSummary = {
   status: FulfillmentStatus;
   isSampleData: boolean;
   requiresShipping: boolean;
+  // Money in the shop currency; the failure costs are EUR cents (see failure.ts).
+  totalCents: number;
+  refundedCents: number;
+  cancelReason: string | null;
+  chargebacks: number;
+  chargebacksLost: number;
+  isReplacement: boolean;
+  replacementForId: string | null;
+  failureCause: string | null;
+  refundCostCents: number;
+  chargebackCostCents: number;
+  reshipCostCents: number;
+  supportCostCents: number;
+  lostRevenueCents: number;
+  failureCostCents: number;
   storeId: string | null;
   store: { name: string; shopDomain: string; customDomain: string | null } | null;
   items: {
@@ -132,6 +147,20 @@ export const demoOrders: OrderSummary[] = samples.map((sample, index) => {
     status: sample.status,
     isSampleData: true,
     requiresShipping: true,
+    totalCents: sample.items.reduce((sum, item) => sum + item.quantity * 2400, 0),
+    refundedCents: sample.issue?.refund ?? 0,
+    cancelReason: null,
+    chargebacks: 0,
+    chargebacksLost: 0,
+    isReplacement: false,
+    replacementForId: null,
+    failureCause: sample.issue?.category ?? null,
+    refundCostCents: sample.issue?.refund ?? 0,
+    chargebackCostCents: 0,
+    reshipCostCents: sample.issue?.replacement ?? 0,
+    supportCostCents: sample.issue ? 200 : 0,
+    lostRevenueCents: 0,
+    failureCostCents: sample.issue ? sample.issue.refund + sample.issue.replacement + 200 : 0,
     storeId: null,
     store: null,
     items: sample.items.map((item, itemIndex) => ({ id: `${sample.reference}-item-${itemIndex}`, sku: item.sku, name: item.name, quantity: item.quantity, shippedQuantity: item.shipped, unitPriceCents: 2400 })),

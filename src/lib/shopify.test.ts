@@ -92,3 +92,19 @@ test("SLA due dates skip weekends", () => {
   assert.equal(addWorkingDays(new Date("2026-10-05T10:00:00Z"), 5).toISOString(), "2026-10-12T10:00:00.000Z"); // Mon -> next Mon
   assert.equal(addWorkingDays(new Date("2026-10-02T10:00:00Z"), 0).toISOString(), "2026-10-02T10:00:00.000Z");
 });
+
+test("money, cancellation, chargebacks and replacement detection", () => {
+  const paid = mapShopifyOrder({ ...base, totalPriceSet: { shopMoney: { amount: "25.00" } }, totalRefundedSet: { shopMoney: { amount: "10.00" } }, refunds: [{ createdAt: "2026-10-05T00:00:00Z" }, { createdAt: "2026-10-03T00:00:00Z" }], disputes: [{ initiatedAs: "CHARGEBACK", status: "LOST" }, { initiatedAs: "CHARGEBACK", status: "WON" }, { initiatedAs: "INQUIRY", status: "LOST" }] }, sla).order;
+  assert.equal(paid.totalCents, 2500);
+  assert.equal(paid.refundedCents, 1000);
+  assert.equal(paid.refundCount, 2);
+  assert.equal(paid.firstRefundAt?.toISOString(), "2026-10-03T00:00:00.000Z");
+  assert.equal(paid.chargebacks, 2);
+  assert.equal(paid.chargebacksLost, 1);
+  assert.equal(paid.isReplacement, false);
+  assert.equal(mapShopifyOrder({ ...base, totalPriceSet: { shopMoney: { amount: "0.00" } } }, sla).order.isReplacement, true);
+  assert.equal(mapShopifyOrder({ ...base, totalPriceSet: { shopMoney: { amount: "9.00" } }, tags: ["Ersatz"] }, sla).order.isReplacement, true);
+  const cancelled = mapShopifyOrder({ ...base, cancelledAt: "2026-10-02T00:00:00Z", cancelReason: "CUSTOMER", totalPriceSet: { shopMoney: { amount: "0.00" } } }, sla).order;
+  assert.equal(cancelled.cancelReason, "CUSTOMER");
+  assert.equal(cancelled.isReplacement, false);
+});

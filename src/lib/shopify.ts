@@ -1,7 +1,9 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import type { FulfillmentStatus, ShopifyStore } from "@prisma/client";
 import { decrypt, encrypt } from "@/lib/encryption";
-import { getPrisma } from "@/lib/prisma";
+import { getPrisma, runInBatches } from "@/lib/prisma";
+import { recomputeFailures } from "@/lib/failure";
+import { eurRate } from "@/lib/fx";
 import { linkTickets } from "@/lib/support-matching";
 
 export const SHOPIFY_API_VERSION = "2026-10";
@@ -99,7 +101,11 @@ const ORDERS_QUERY = `query Orders($cursor: String, $query: String) {
   orders(first: 10, after: $cursor, sortKey: UPDATED_AT, query: $query) {
     pageInfo { hasNextPage endCursor }
     nodes {
-      id name email createdAt cancelledAt displayFulfillmentStatus currencyCode
+      id name email createdAt cancelledAt cancelReason displayFulfillmentStatus displayFinancialStatus currencyCode tags
+      totalPriceSet { shopMoney { amount } }
+      totalRefundedSet { shopMoney { amount } }
+      refunds { createdAt }
+      disputes { initiatedAs status }
       shippingAddress { name countryCodeV2 }
       billingAddress { name }
       shippingLine { title }
@@ -115,8 +121,15 @@ export type ShopifyOrder = {
   email: string | null;
   createdAt: string;
   cancelledAt: string | null;
+  cancelReason?: string | null;
   displayFulfillmentStatus: string;
+  displayFinancialStatus?: string | null;
   currencyCode: string;
+  tags?: string[];
+  totalPriceSet?: { shopMoney: { amount: string } };
+  totalRefundedSet?: { shopMoney: { amount: string } };
+  refunds?: { createdAt: string | null }[];
+  disputes?: { initiatedAs: string; status: string }[];
   shippingAddress: { name: string | null; countryCodeV2: string | null } | null;
   billingAddress: { name: string | null } | null;
   shippingLine: { title: string } | null;
@@ -172,6 +185,10 @@ const toCents = (amount: string) => Math.round(Number(amount) * 100);
 const earliest = (dates: Date[]) => (dates.length ? new Date(Math.min(...dates.map(Number))) : null);
 const latest = (dates: Date[]) => (dates.length ? new Date(Math.max(...dates.map(Number))) : null);
 
+// Free or tagged orders that make up for an earlier one. Tags seen across stores' languages (EN/DE/SV/NL).
+// ponytail: heuristic; set a fixed tag in Shopify (e.g. "reship") for replacement orders and this becomes exact.
+const REPLACEMENT_TAG = /replac|reship|re-ship|resend|re-send|ersatz|nachsend|ersättning|ersattning|vervang|warranty|garanti/i;
+
 /** Pure mapping from a Shopify order to our columns, so it can be tested without a database. */
 export function mapShopifyOrder(order: ShopifyOrder, sla: { dispatchSlaDays: number; deliverySlaDays: number }, now = new Date()) {
   const orderDate = new Date(order.createdAt);
@@ -218,7 +235,8 @@ export function mapShopifyOrder(order: ShopifyOrder, sla: { dispatchSlaDays: num
     events.push({ eventType: "Fulfilled in Shopify", details: [info?.company, info?.number].filter(Boolean).join(" · ") || "No tracking details", occurredAt: new Date(fulfillment.createdAt) });
     if (fulfillment.deliveredAt) events.push({ eventType: "Delivered", details: "Marked delivered in Shopify", occurredAt: new Date(fulfillment.deliveredAt) });
   }
-  if (order.cancelledAt) events.push({ eventType: "Order cancelled", details: "Cancelled in Shopify", occurredAt: new Date(order.cancelledAt) });
+  if (order.cancelledAt) events.push({ eventType: "Order cancelled", details: order.cancelReason ? `Cancelled in Shopify · reason: ${order.cancelReason.toLowerCase()}` : "Cancelled in Shopify", occurredAt: new Date(order.cancelledAt) });
+  for (const refund of order.refunds ?? []) if (refund.createdAt) events.push({ eventType: "Refunded", details: "Refund issued in Shopify", occurredAt: new Date(refund.createdAt) });
 
   return {
     order: {
@@ -238,6 +256,18 @@ export function mapShopifyOrder(order: ShopifyOrder, sla: { dispatchSlaDays: num
       deliveredAt,
       status,
       requiresShipping: needsShipping,
+      totalCents: toCents(order.totalPriceSet?.shopMoney.amount ?? "0"),
+      refundedCents: toCents(order.totalRefundedSet?.shopMoney.amount ?? "0"),
+      refundCount: order.refunds?.length ?? 0,
+      firstRefundAt: earliest((order.refunds ?? []).filter((refund) => refund.createdAt).map((refund) => new Date(refund.createdAt!))),
+      cancelReason: order.cancelReason ?? null,
+      cancelledAt: order.cancelledAt ? new Date(order.cancelledAt) : null,
+      financialStatus: order.displayFinancialStatus ?? null,
+      tags: order.tags ?? [],
+      chargebacks: (order.disputes ?? []).filter((dispute) => dispute.initiatedAs === "CHARGEBACK").length,
+      chargebacksLost: (order.disputes ?? []).filter((dispute) => dispute.initiatedAs === "CHARGEBACK" && (dispute.status === "LOST" || dispute.status === "ACCEPTED")).length,
+      // A shipped order that cost the customer nothing, or is tagged as one, replaces an earlier order.
+      isReplacement: needsShipping && !order.cancelledAt && (toCents(order.totalPriceSet?.shopMoney.amount ?? "1") === 0 || (order.tags ?? []).some((tag) => REPLACEMENT_TAG.test(tag))),
     },
     items,
     events,
@@ -245,8 +275,19 @@ export function mapShopifyOrder(order: ShopifyOrder, sla: { dispatchSlaDays: num
 }
 
 async function saveOrder(store: ShopifyStore, shopifyOrder: ShopifyOrder) {
-  const { order, items, events } = mapShopifyOrder(shopifyOrder, store);
-  await getPrisma().$transaction(async (tx) => {
+  const mapped = mapShopifyOrder(shopifyOrder, store);
+  const { items, events } = mapped;
+  const prisma = getPrisma();
+  // The replaced order: the same customer's latest earlier order in this store within 90 days.
+  const replacementFor = mapped.order.isReplacement && mapped.order.customerEmail
+    ? await prisma.order.findFirst({
+        where: { storeId: store.id, customerEmail: mapped.order.customerEmail, isReplacement: false, shopifyGid: { not: shopifyOrder.id }, orderDate: { lt: mapped.order.orderDate, gte: new Date(mapped.order.orderDate.getTime() - 90 * DAY) } },
+        orderBy: { orderDate: "desc" },
+        select: { id: true },
+      })
+    : null;
+  const order = { ...mapped.order, eurRate: await eurRate(mapped.order.currency, mapped.order.orderDate), replacementForId: replacementFor?.id ?? null };
+  await prisma.$transaction(async (tx) => {
     const { id } = await tx.order.upsert({
       // The (storeId, shopifyGid) unique key is what guarantees an order is never imported twice.
       where: { storeId_shopifyGid: { storeId: store.id, shopifyGid: shopifyOrder.id } },
@@ -285,10 +326,8 @@ export async function syncStore(storeId: string) {
       const from = store.importOrdersFrom;
       const query = `updated_at:>='${since.toISOString()}'${from ? ` AND created_at:>='${from.toISOString()}'` : ""}`;
       const page: OrdersPage = await adminGraphql<OrdersPage>(store.shopDomain, token, ORDERS_QUERY, { cursor, query });
-      for (const order of page.orders.nodes) {
-        // Second guard in case Shopify ever ignores the created_at filter.
-        if (!from || new Date(order.createdAt) >= from) await saveOrder(store, order);
-      }
+      // Second guard in case Shopify ever ignores the created_at filter. Orders are independent, so a page saves in parallel.
+      await runInBatches(page.orders.nodes.filter((order) => !from || new Date(order.createdAt) >= from), (order) => saveOrder(store, order));
       imported += page.orders.nodes.length;
       progress.imported = imported;
       cursor = page.orders.pageInfo.hasNextPage ? page.orders.pageInfo.endCursor : null;
@@ -296,6 +335,7 @@ export async function syncStore(storeId: string) {
     await prisma.shopifyStore.update({ where: { id: storeId }, data: { lastSyncedAt: startedAt, lastSyncError: null } });
     // New orders may be what waiting support tickets refer to.
     await linkTickets();
+    await recomputeFailures(storeId);
     return { imported, skipped: false };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

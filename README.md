@@ -47,4 +47,16 @@ Admins add stores on the **Stores** page (Shopify domain, optional custom domain
 - App secrets and tokens are encrypted with `ENCRYPTION_KEY`. Use the same key on every machine that shares the database.
 - Shopify has no factory data, so imported orders start with factory "Unassigned"; pick/pack timestamps stay empty. Carrier collection is taken from the fulfillment time and delivery from Shopify's delivered status.
 
+## Cost of failure
+
+The overview opens with what failed orders cost, in EUR, for orders placed in the period. Each order's cost is stored on it (`src/lib/failure.ts`, recomputed after every Shopify and Commslayer sync and when costs change):
+
+- **Refunds** — Shopify's refunded amount (not for cancelled orders).
+- **Lost revenue** — the total of cancelled orders; their refund isn't counted again.
+- **Chargebacks** — the store's fee per chargeback, plus the unrefunded order value when the dispute is lost or accepted.
+- **Reshipping** — the store's reship cost per replacement order: a €0 or replacement-tagged order for the same customer within 90 days, or a ticket labelled as a reshipment.
+- **Support handling** — the store's cost per linked ticket.
+
+Reship, chargeback-fee and ticket costs are set per store under **Stores → Cost assumptions**. Amounts are converted with the ECB rate on the order date (frankfurter.dev). Each failed order is filed under one root cause: its ticket's category first, then Shopify's cancellation reason, chargebacks, and finally the fulfilment data. Every number on the dashboard links to the matching orders.
+
 Support-system integrations are intentionally outside this slice.

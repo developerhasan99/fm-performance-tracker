@@ -1,6 +1,7 @@
 import { Prisma, type IssueCategory } from "@prisma/client";
 import { decrypt } from "@/lib/encryption";
 import { getPrisma, runInBatches } from "@/lib/prisma";
+import { recomputeFailures } from "@/lib/failure";
 import { linkTickets } from "@/lib/support-matching";
 
 const BASE_URL = "https://app.commslayer.com/api/integration/v1";
@@ -167,6 +168,7 @@ export async function syncSupportAccount(accountId: string) {
     await checkMessages(accountId, token);
     await prisma.supportAccount.update({ where: { id: accountId }, data: { lastSyncedAt: startedAt, lastSyncError: null } });
     await linkTickets();
+    await recomputeFailures();
     return { imported: progress.imported, skipped: false };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

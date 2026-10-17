@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Form from "next/form";
 import Link from "next/link";
-import { Calendar, ChevronLeft, ChevronRight, Download, Search } from "lucide-react";
+import { Calendar, ChevronLeft, ChevronRight, Download, Search, X } from "lucide-react";
 import { OrdersTable } from "@/components/orders-table";
 import { ORDERS_PAGE_SIZE, getOrders, getStoreOptions, orderStatuses, parseOrderParams, type OrderParams } from "@/lib/dashboard";
 import { requireUser } from "@/lib/auth";
@@ -14,10 +14,15 @@ export default async function OrdersPage({ searchParams }: { searchParams: Promi
   const params = await searchParams;
   const page = Math.max(1, Math.floor(Number(params.page)) || 1);
   const stores = await getStoreOptions();
-  const { query, status, storeId, noShipping, from, to, filters, search } = parseOrderParams(params, stores);
+  const { query, status, storeId, noShipping, from, to, drill, filters, search } = parseOrderParams(params, stores);
   const { includeNoShipping } = filters;
   const { orders, total } = await getOrders({ ...filters, page });
-  const hasFilters = Boolean(query || status || storeId || includeNoShipping || from || to);
+  const hasFilters = Boolean(query || status || storeId || includeNoShipping || from || to || drill.length);
+  const without = (key: string) => {
+    const rest = new URLSearchParams(search);
+    rest.delete(key);
+    return `/orders${rest.size ? `?${rest}` : ""}`;
+  };
   const pageCount = Math.max(1, Math.ceil(total / ORDERS_PAGE_SIZE));
   const pageHref = (target: number) => {
     const pageSearch = new URLSearchParams(search);
@@ -36,7 +41,9 @@ export default async function OrdersPage({ searchParams }: { searchParams: Promi
       </div>
       {(process.env.DASHBOARD_DEMO_MODE === "true" || orders.some((order) => order.isSampleData)) && <div className="sample-banner" role="status"><span><strong>Sample data included</strong> — seeded rows are illustrative; connect your systems for live reporting.</span></div>}
       <section className="panel table-panel">
-      <Form className="filter-bar" action="/orders" key={`${query}|${status}|${storeId}|${includeNoShipping}|${from}|${to}`}>
+      <Form className="filter-bar" action="/orders" key={search.toString()}>
+        {/* Drill-down filters from the dashboard ride along when the visible filters are applied. */}
+        {drill.map((filter) => <input key={filter.key} type="hidden" name={filter.key} value={filter.value} />)}
         <label className="search-field"><Search size={14} /><input name="q" type="search" placeholder="Search order, customer or partner" defaultValue={query} aria-label="Search orders" /></label>
         <select className="filter-select" name="status" defaultValue={status ?? ""} aria-label="Filter by fulfilment status">
           <option value="">All statuses</option>
@@ -57,6 +64,7 @@ export default async function OrdersPage({ searchParams }: { searchParams: Promi
         <label className="check-chip"><input type="checkbox" name="noShipping" value="1" defaultChecked={noShipping} />No-shipping orders</label>
         <button className="search-button filter-apply" type="submit">Apply</button>
       </Form>
+      {drill.length > 0 && <div className="filter-chips" aria-label="Dashboard filters">{drill.map((filter) => <Link key={filter.key} className="filter-chip" href={without(filter.key)} aria-label={`Remove filter ${filter.label}`}>{filter.label}<X size={12} /></Link>)}</div>}
       <OrdersTable orders={orders} />
       </section>
       {total > ORDERS_PAGE_SIZE && (

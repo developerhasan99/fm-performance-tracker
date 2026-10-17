@@ -3,7 +3,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, CircleDollarSign, PackageCheck } from "lucide-react";
 import { StatusBadge } from "@/components/status-badge";
-import { formatCurrency, formatDate, getOrderById, issueLabels } from "@/lib/dashboard";
+import { formatCurrency, formatDate, formatEuro, getOrderById, issueLabels } from "@/lib/dashboard";
+import { CAUSES, COST_TYPES, isCause, type CostType } from "@/lib/failure";
 import { requireUser } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
@@ -21,7 +22,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
   if (!order) notFound();
   const itemsOrdered = order.items.reduce((total, item) => total + item.quantity, 0);
   const itemsShipped = order.items.reduce((total, item) => total + item.shippedQuantity, 0);
-  const failureCost = order.contacts.reduce((total, contact) => total + contact.refundAmountCents + contact.replacementCostCents, 0);
+  const costParts = (Object.keys(COST_TYPES) as CostType[]).map((key) => ({ label: COST_TYPES[key].label, cents: order[COST_TYPES[key].column] })).filter((part) => part.cents > 0);
 
   return (
     <>
@@ -47,7 +48,16 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
         <section className="panel">
           <div className="panel-heading"><div><h2 className="panel-title">Order contents</h2><p className="panel-description">{itemsShipped} of {itemsOrdered} items shipped</p></div><PackageCheck size={15} color="#76857b" /></div>
           <table className="items-table"><thead><tr><th>ITEM</th><th>SKU</th><th>QTY</th></tr></thead><tbody>{order.items.map((item) => <tr key={item.id}><td>{item.name}</td><td>{item.sku}</td><td className={item.shippedQuantity >= item.quantity ? "quantity-good" : "quantity-short"}>{item.shippedQuantity} / {item.quantity}</td></tr>)}</tbody></table>
-          {order.contacts.length > 0 && <div className="issue-detail"><h3>Customer impact</h3>{order.contacts.map((contact) => <div className="issue-detail-row" key={contact.id}><span>{issueLabels[contact.category]}{contact.refundRequested && " · Refund requested"}{contact.wismo && " · Where is my order"}{contact.subject && <span className="issue-subject">{contact.subject}</span>}</span><strong>{contact.resolution}</strong></div>)}<div className="issue-detail-row"><span><CircleDollarSign size={12} style={{ verticalAlign: "middle", marginRight: 4 }} />Known failure cost</span><strong>{formatCurrency(failureCost, order.currency)}</strong></div></div>}
+          {order.contacts.length > 0 && <div className="issue-detail"><h3>Customer impact</h3>{order.contacts.map((contact) => <div className="issue-detail-row" key={contact.id}><span>{issueLabels[contact.category]}{contact.refundRequested && " · Refund requested"}{contact.wismo && " · Where is my order"}{contact.subject && <span className="issue-subject">{contact.subject}</span>}</span><strong>{contact.resolution}</strong></div>)}</div>}
+          {(order.failureCostCents > 0 || order.totalCents > 0) && (
+            <div className="issue-detail">
+              <h3>Cost of failure</h3>
+              <div className="issue-detail-row"><span>Order total{order.refundedCents > 0 && ` · ${formatCurrency(order.refundedCents, order.currency)} refunded`}{order.cancelReason && ` · cancelled (${order.cancelReason.toLowerCase()})`}{order.chargebacks > 0 && ` · ${order.chargebacks} chargeback${order.chargebacks === 1 ? "" : "s"}`}</span><strong>{formatCurrency(order.totalCents, order.currency)}</strong></div>
+              {order.replacementForId && <div className="issue-detail-row"><span>Replacement order</span><Link className="cell-link" href={`/orders/${order.replacementForId}`}>See the original order</Link></div>}
+              {costParts.map((part) => <div className="issue-detail-row" key={part.label}><span>{part.label}</span><strong>{formatEuro(part.cents)}</strong></div>)}
+              <div className="issue-detail-row"><span><CircleDollarSign size={12} style={{ verticalAlign: "middle", marginRight: 4 }} />{isCause(order.failureCause) ? `Total · ${CAUSES[order.failureCause]}` : "Total"}</span><strong>{formatEuro(order.failureCostCents)}</strong></div>
+            </div>
+          )}
         </section>
       </div>
     </>

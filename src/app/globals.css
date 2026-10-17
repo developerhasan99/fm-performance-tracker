@@ -120,7 +120,7 @@ button:disabled{opacity:.6;cursor:default}
 .setup-steps{margin:0;padding-left:18px;color:#626d66;font-size:11px;line-height:1.9}
 .setup-steps a{color:var(--green);text-decoration:underline}
 .setup-steps code{border-radius:3px;background:#f2f4f1;padding:1px 4px;font-size:10px;word-break:break-all}
-.sla-field{display:flex;align-items:center;gap:6px;color:#626d66;font-size:11px}.sla-field .text-input{width:58px}
+.sla-field{display:flex;align-items:center;gap:6px;color:#626d66;font-size:11px}.sla-field .text-input{width:58px}.sla-field .cost-input{width:80px}
 .row-actions{display:flex;flex-wrap:wrap;gap:6px}
 /* Whole row opens the order: the reference link stretches over its row. */
 .row-link{position:relative;cursor:pointer}
@@ -146,6 +146,13 @@ button:disabled{opacity:.6;cursor:default}
 .table-panel:has(.filter-bar){container-type:inline-size}
 @container (max-width:1100px){.filter-bar{flex-wrap:wrap}.filter-bar .search-field{flex-basis:100%}.filter-bar .filter-select,.date-range,.check-chip{flex:1 1 auto}}
 .filter-bar .filter-apply{flex:0 0 auto;height:34px;padding:0 16px;font-size:12px}
+.filter-chips{display:flex;flex-wrap:wrap;gap:6px;border-bottom:1px solid var(--line);padding:10px 14px}
+.filter-chip{display:inline-flex;align-items:center;gap:6px;border:1px solid #bcd6ca;border-radius:999px;background:var(--green-soft);color:var(--green);padding:4px 8px 4px 10px;font-size:11px;font-weight:600}.filter-chip:hover{border-color:var(--green)}
+.failure-cell{display:flex;flex-direction:column;gap:2px}.failure-cell strong{color:var(--red);font-weight:700}.failure-cell span{color:var(--muted);font-size:10px}
+.metric-link{display:block;color:inherit;transition:border-color .15s}.metric-link:hover{border-color:#bcd6ca}
+.bar-link{border-radius:4px;color:inherit}.bar-link:hover .issue-name{color:var(--green);text-decoration:underline}.bar-link:hover .issue-fill{filter:brightness(.92)}
+.cell-link{color:inherit;text-decoration:underline;text-decoration-color:#d3dad5;text-underline-offset:3px}.cell-link:hover{color:var(--green);text-decoration-color:currentColor}.cell-link.strong{font-weight:700}
+.total-row td{border-top:1px solid var(--line);font-weight:700}
 .clear-link{color:var(--green);font-weight:600;text-decoration:underline;text-underline-offset:2px}
 .heading-controls .results-count{margin:0;font-size:12px}.heading-controls .secondary-button{height:34px;padding:0 12px;font-size:12px}
 .sync-running{display:inline-flex;align-items:center;gap:6px;color:var(--green);font-weight:600}

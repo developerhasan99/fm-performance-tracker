@@ -1,5 +1,6 @@
 import { FulfillmentStatus, IssueCategory, Prisma } from "@prisma/client";
 import { demoOrders, type OrderSummary } from "@/lib/demo-data";
+import { CAUSES, COST_TYPES, isCause, isCostType, type Cause, type CostType } from "@/lib/failure";
 import { getPrisma } from "@/lib/prisma";
 
 const orderInclude = {
@@ -71,6 +72,9 @@ export function formatCurrency(amountCents: number, currency = "GBP") {
   }).format(amountCents / 100);
 }
 
+/** EUR cents → "€1,234" (whole euros; costs are estimates). */
+export const formatEuro = (cents: number) => new Intl.NumberFormat("en-GB", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(cents / 100);
+
 export function formatDate(date: Date, options?: Intl.DateTimeFormatOptions) {
   return new Intl.DateTimeFormat("en-GB", options ?? {
     day: "numeric",
@@ -90,6 +94,14 @@ export type OrderFilters = {
   /** Order date range: from is inclusive, before is exclusive. */
   from?: Date;
   before?: Date;
+  /** Drill-downs from the dashboard. */
+  cause?: Cause;
+  cost?: CostType | "any";
+  carrier?: string;
+  sku?: string;
+  country?: string;
+  /** Past its dispatch due date and not handed to a carrier (right now). */
+  notDispatched?: boolean;
   /** 1-based; omit for every matching order (export). */
   page?: number;
 };
@@ -100,7 +112,22 @@ export const orderStatuses: FulfillmentStatus[] = ["placed", "processing", "in_t
 // ponytail: days are UTC, so UK summer time shifts the boundary by an hour; use the shop's timezone if that matters.
 const parseDay = (value?: string) => (value && /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(value)) ? value : undefined);
 
-export type OrderParams = { q?: string; status?: string; store?: string; noShipping?: string; from?: string; to?: string };
+export type OrderParams = { q?: string; status?: string; store?: string; noShipping?: string; from?: string; to?: string; cause?: string; cost?: string; carrier?: string; sku?: string; country?: string; stage?: string };
+
+const text = (value?: string) => value?.trim().slice(0, 200) || undefined;
+
+/** The dashboard drill-down filters in effect, with a label for the chip that shows (and removes) each. */
+export function drillDowns(params: OrderParams) {
+  const cost = params.cost === "any" || isCostType(params.cost) ? params.cost : undefined;
+  return [
+    { key: "cause", value: isCause(params.cause) ? params.cause : undefined, label: isCause(params.cause) ? `Cause: ${CAUSES[params.cause]}` : "" },
+    { key: "cost", value: cost, label: cost === "any" ? "Has a failure cost" : cost ? `Cost: ${COST_TYPES[cost].label}` : "" },
+    { key: "carrier", value: text(params.carrier), label: `Carrier: ${text(params.carrier)}` },
+    { key: "sku", value: text(params.sku), label: `Product: ${text(params.sku)}` },
+    { key: "country", value: text(params.country), label: `Country: ${text(params.country)}` },
+    { key: "stage", value: params.stage === "not_dispatched" ? "not_dispatched" : undefined, label: "Overdue, not dispatched" },
+  ].filter((filter): filter is { key: string; value: string; label: string } => Boolean(filter.value));
+}
 
 /** Validated filters from the orders URL, shared by the list and its CSV export. `search` holds them without the page. */
 export function parseOrderParams(params: OrderParams, stores: { id: string }[]) {
@@ -110,8 +137,10 @@ export function parseOrderParams(params: OrderParams, stores: { id: string }[]) 
   const noShipping = params.noShipping === "1";
   const from = parseDay(params.from);
   const to = parseDay(params.to);
+  const drill = drillDowns(params);
+  const drillValue = (key: string) => drill.find((filter) => filter.key === key)?.value;
   return {
-    query, status, storeId, noShipping, from, to,
+    query, status, storeId, noShipping, from, to, drill,
     filters: {
       search: query,
       status,
@@ -120,13 +149,19 @@ export function parseOrderParams(params: OrderParams, stores: { id: string }[]) 
       includeNoShipping: noShipping || status === "completed",
       from: from ? new Date(`${from}T00:00:00Z`) : undefined,
       before: to ? new Date(Date.parse(`${to}T00:00:00Z`) + 24 * 60 * 60 * 1000) : undefined,
+      cause: drillValue("cause") as Cause | undefined,
+      cost: drillValue("cost") as CostType | "any" | undefined,
+      carrier: drillValue("carrier"),
+      sku: drillValue("sku"),
+      country: drillValue("country"),
+      notDispatched: drillValue("stage") === "not_dispatched",
     } satisfies OrderFilters,
-    search: new URLSearchParams({ ...(query && { q: query }), ...(status && { status }), ...(storeId && { store: storeId }), ...(noShipping && { noShipping: "1" }), ...(from && { from }), ...(to && { to }) }),
+    search: new URLSearchParams({ ...(query && { q: query }), ...(status && { status }), ...(storeId && { store: storeId }), ...(noShipping && { noShipping: "1" }), ...(from && { from }), ...(to && { to }), ...Object.fromEntries(drill.map((filter) => [filter.key, filter.value])) }),
   };
 }
 
 /** One page of orders plus the total match count, or every match when no page is given. */
-export async function getOrders({ search, status, storeId, includeNoShipping, from, before, page }: OrderFilters) {
+export async function getOrders({ search, status, storeId, includeNoShipping, from, before, cause, cost, carrier, sku, country, notDispatched, page }: OrderFilters) {
   const skip = page ? (page - 1) * ORDERS_PAGE_SIZE : 0;
   const take = page ? ORDERS_PAGE_SIZE : undefined;
   if (isDemoMode()) {
@@ -146,6 +181,12 @@ export async function getOrders({ search, status, storeId, includeNoShipping, fr
     ...(storeId ? { storeId } : {}),
     ...(includeNoShipping ? {} : { requiresShipping: true }),
     ...(from || before ? { orderDate: { ...(from && { gte: from }), ...(before && { lt: before }) } } : {}),
+    ...(cause && { failureCause: cause }),
+    ...(cost && { [cost === "any" ? "failureCostCents" : COST_TYPES[cost].column]: { gt: 0 } }),
+    ...(carrier && { carrier }),
+    ...(sku && { items: { some: { sku } } }),
+    ...(country && { market: country }),
+    ...(notDispatched && { carrierCollectedAt: null, dispatchDueAt: { lt: new Date() }, status: { not: "cancelled" as const } }),
     ...(query ? { OR: [
       { shopifyOrderId: { contains: query, mode: "insensitive" } },
       { customerName: { contains: query, mode: "insensitive" } },

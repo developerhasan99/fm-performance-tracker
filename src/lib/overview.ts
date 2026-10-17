@@ -220,7 +220,7 @@ function build({ days, now, current, previous, dispatchedAt, overdue, overdueCou
     wismo: tickets.filter((ticket) => ticket.wismo).length,
     linkedRate: percent(tickets.filter((ticket) => ticket.orderId).length, tickets.length),
     categories: support.byCategory
-      .map((row) => ({ label: row.category ? issueLabels[row.category as IssueCategory] : "General enquiry", count: row._count }))
+      .map((row) => ({ key: row.category ?? "none", label: row.category ? issueLabels[row.category as IssueCategory] : "General enquiry", count: row._count }))
       .sort((a, b) => b.count - a.count),
     daily: dailyCounts(tickets.map((ticket) => ticket.ticketCreatedAt), days, now),
   };
