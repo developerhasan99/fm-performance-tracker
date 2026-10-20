@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
     ["Order", "Store", "Order date (UTC)", "Customer", "Email", "Status", "Requires shipping", "Items", "Units", "Units shipped", "Order total", "Currency",
       "Factory", "Carrier", "Shipping service", "Tracking number", "Tracking URL", "Dispatch due", "Collected by carrier", "Delivery due", "Delivered",
       "Support contacts", "WISMO contacts", "Refund requested", "Refunded (order currency)", "Cancel reason", "Chargebacks", "Replacement order",
-      "Cost of failure (EUR)", "Root cause", "Refund cost (EUR)", "Chargeback cost (EUR)", "Reship cost (EUR)", "Support cost (EUR)", "Lost revenue (EUR)"],
+      "Cost of failure (EUR)", "Root cause", "Refund cost (EUR)", "Chargeback cost (EUR)", "Reship cost (EUR)"],
     ...orders.map((order) => [
       order.shopifyOrderId, order.store?.name, order.orderDate, order.customerName, order.customerEmail, statusLabels[order.status], order.requiresShipping ? "Yes" : "No",
       order.items.map((item) => `${item.quantity} × ${item.name}${item.sku ? ` (${item.sku})` : ""}`).join("; "),
@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
       order.contacts.length, order.contacts.filter((contact) => contact.wismo).length, order.contacts.some((contact) => contact.refundRequested) ? "Yes" : "No",
       euros(order.refundedCents), order.cancelReason?.toLowerCase(), order.chargebacks, order.isReplacement ? "Yes" : "No",
       euros(order.failureCostCents), isCause(order.failureCause) ? CAUSES[order.failureCause] : null,
-      ...[order.refundCostCents, order.chargebackCostCents, order.reshipCostCents, order.supportCostCents, order.lostRevenueCents].map(euros),
+      ...[order.refundCostCents, order.chargebackCostCents, order.reshipCostCents].map(euros),
     ]),
   ]);
 }

@@ -225,7 +225,7 @@ function FailureSection({ report, storeId, days }: { report: FailureReport; stor
       <div className="metrics-grid">
         <MetricCard title="Cost of failure" value={formatEuro(total.total)} delta={<Delta value={change} goodWhen="down" />} footnote={report.missingMoney ? "Share of sales shows once every order is re-synced" : `${ratePct(report.revenue ? total.total / report.revenue : null)} of ${formatEuro(report.revenue)} sales`} icon={Euro} href={orders({ cost: "any" })} />
         <MetricCard title="Orders with a failure" value={number(report.failed)} footnote={`${ratePct(report.orders ? report.failed / report.orders : null)} of ${number(report.orders)} orders`} icon={PackageX} href={orders({ cost: "any" })} />
-        <MetricCard title="Cost per failed order" value={report.failed ? formatEuro(total.total / report.failed) : "—"} footnote="Refunds, reships, chargebacks, support and cancellations" icon={Target} />
+        <MetricCard title="Cost per failed order" value={report.failed ? formatEuro(total.total / report.failed) : "—"} footnote="Refunds, reships and chargebacks" icon={Target} />
         <MetricCard title="Biggest cause" value={top ? formatEuro(top.total) : "—"} footnote={top ? `${top.label} · ${shareOf(top.total)} of the cost, ${number(top.failed)} orders` : "No failures in this period"} icon={TriangleAlert} href={top ? orders({ cause: top.cause }) : undefined} />
       </div>
       <div className="lower-grid even-grid">
@@ -240,7 +240,7 @@ function FailureSection({ report, storeId, days }: { report: FailureReport; stor
       </div>
 
       <section className="panel table-panel">
-        <div className="panel-heading"><div><h2 className="panel-title">Root causes</h2><p className="panel-description">Each failed order is filed under one cause: its support ticket first, then Shopify&apos;s cancellation reason, chargebacks and delivery data. Click any amount for those orders.</p></div></div>
+        <div className="panel-heading"><div><h2 className="panel-title">Root causes</h2><p className="panel-description">Each failed order is filed under one cause: its support ticket first, then chargebacks and delivery data. Click any amount for those orders.</p></div></div>
         {report.causes.length ? (
           <div className="table-scroll">
             <table className="data-table numeric-table">

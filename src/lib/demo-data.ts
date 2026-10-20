@@ -35,8 +35,6 @@ export type OrderSummary = {
   refundCostCents: number;
   chargebackCostCents: number;
   reshipCostCents: number;
-  supportCostCents: number;
-  lostRevenueCents: number;
   failureCostCents: number;
   storeId: string | null;
   store: { name: string; shopDomain: string; customDomain: string | null } | null;
@@ -158,9 +156,7 @@ export const demoOrders: OrderSummary[] = samples.map((sample, index) => {
     refundCostCents: sample.issue?.refund ?? 0,
     chargebackCostCents: 0,
     reshipCostCents: sample.issue?.replacement ?? 0,
-    supportCostCents: sample.issue ? 200 : 0,
-    lostRevenueCents: 0,
-    failureCostCents: sample.issue ? sample.issue.refund + sample.issue.replacement + 200 : 0,
+    failureCostCents: sample.issue ? sample.issue.refund + sample.issue.replacement : 0,
     storeId: null,
     store: null,
     items: sample.items.map((item, itemIndex) => ({ id: `${sample.reference}-item-${itemIndex}`, sku: item.sku, name: item.name, quantity: item.quantity, shippedQuantity: item.shipped, unitPriceCents: 2400 })),

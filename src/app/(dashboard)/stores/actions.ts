@@ -103,10 +103,9 @@ export async function updateStoreCosts(_state: ActionResult, formData: FormData)
   await requireAdmin();
   const reshipCostCents = euroCents(field(formData, "reshipCost"));
   const chargebackFeeCents = euroCents(field(formData, "chargebackFee"));
-  const ticketCostCents = euroCents(field(formData, "ticketCost"));
-  if (reshipCostCents === null || chargebackFeeCents === null || ticketCostCents === null) return fail("Enter each cost in euros, between 0 and 10,000.");
+  if (reshipCostCents === null || chargebackFeeCents === null) return fail("Enter each cost in euros, between 0 and 10,000.");
   const storeId = field(formData, "storeId");
-  await getPrisma().shopifyStore.update({ where: { id: storeId }, data: { reshipCostCents, chargebackFeeCents, ticketCostCents } });
+  await getPrisma().shopifyStore.update({ where: { id: storeId }, data: { reshipCostCents, chargebackFeeCents } });
   // The store's order costs depend on these; recalculating takes a little while, so it runs in the background.
   void recomputeFailures(storeId).catch((error) => console.error(`[failure] recompute: ${error instanceof Error ? error.message : error}`));
   revalidatePath("/stores");

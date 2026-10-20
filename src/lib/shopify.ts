@@ -185,9 +185,26 @@ const toCents = (amount: string) => Math.round(Number(amount) * 100);
 const earliest = (dates: Date[]) => (dates.length ? new Date(Math.min(...dates.map(Number))) : null);
 const latest = (dates: Date[]) => (dates.length ? new Date(Math.max(...dates.map(Number))) : null);
 
-// Free or tagged orders that make up for an earlier one. Tags seen across stores' languages (EN/DE/SV/NL).
-// ponytail: heuristic; set a fixed tag in Shopify (e.g. "reship") for replacement orders and this becomes exact.
+// Orders that make up for an earlier one: tagged as such (stores use e.g. "Replacement Package", "commslayer-free-replacement"),
+// or free and not a sample/gift. Free influencer samples ("sample-request", "trybe") are marketing, not failures.
 const REPLACEMENT_TAG = /replac|reship|re-ship|resend|re-send|ersatz|nachsend|ersättning|ersattning|vervang|warranty|garanti/i;
+const NOT_REPLACEMENT_TAG = /sample|trybe|creator|influenc|gift|giveaway|collab|wholesale|\bpr\b/i;
+
+export function isReplacementOrder(order: { totalCents: number; tags: string[]; requiresShipping: boolean; cancelled: boolean }) {
+  if (!order.requiresShipping || order.cancelled) return false;
+  if (order.tags.some((tag) => REPLACEMENT_TAG.test(tag))) return true;
+  return order.totalCents === 0 && !order.tags.some((tag) => NOT_REPLACEMENT_TAG.test(tag));
+}
+
+/** The order a replacement makes up for: the same customer's latest earlier order in the store, within 90 days. */
+export function findReplacedOrder(order: { id?: string; storeId: string; customerEmail: string; orderDate: Date }) {
+  if (!order.customerEmail) return null;
+  return getPrisma().order.findFirst({
+    where: { storeId: order.storeId, customerEmail: order.customerEmail, isReplacement: false, ...(order.id && { id: { not: order.id } }), orderDate: { lt: order.orderDate, gte: new Date(order.orderDate.getTime() - 90 * DAY) } },
+    orderBy: { orderDate: "desc" },
+    select: { id: true },
+  });
+}
 
 /** Pure mapping from a Shopify order to our columns, so it can be tested without a database. */
 export function mapShopifyOrder(order: ShopifyOrder, sla: { dispatchSlaDays: number; deliverySlaDays: number }, now = new Date()) {
@@ -266,8 +283,7 @@ export function mapShopifyOrder(order: ShopifyOrder, sla: { dispatchSlaDays: num
       tags: order.tags ?? [],
       chargebacks: (order.disputes ?? []).filter((dispute) => dispute.initiatedAs === "CHARGEBACK").length,
       chargebacksLost: (order.disputes ?? []).filter((dispute) => dispute.initiatedAs === "CHARGEBACK" && (dispute.status === "LOST" || dispute.status === "ACCEPTED")).length,
-      // A shipped order that cost the customer nothing, or is tagged as one, replaces an earlier order.
-      isReplacement: needsShipping && !order.cancelledAt && (toCents(order.totalPriceSet?.shopMoney.amount ?? "1") === 0 || (order.tags ?? []).some((tag) => REPLACEMENT_TAG.test(tag))),
+      isReplacement: isReplacementOrder({ totalCents: toCents(order.totalPriceSet?.shopMoney.amount ?? "1"), tags: order.tags ?? [], requiresShipping: needsShipping, cancelled: Boolean(order.cancelledAt) }),
     },
     items,
     events,
@@ -278,14 +294,7 @@ async function saveOrder(store: ShopifyStore, shopifyOrder: ShopifyOrder) {
   const mapped = mapShopifyOrder(shopifyOrder, store);
   const { items, events } = mapped;
   const prisma = getPrisma();
-  // The replaced order: the same customer's latest earlier order in this store within 90 days.
-  const replacementFor = mapped.order.isReplacement && mapped.order.customerEmail
-    ? await prisma.order.findFirst({
-        where: { storeId: store.id, customerEmail: mapped.order.customerEmail, isReplacement: false, shopifyGid: { not: shopifyOrder.id }, orderDate: { lt: mapped.order.orderDate, gte: new Date(mapped.order.orderDate.getTime() - 90 * DAY) } },
-        orderBy: { orderDate: "desc" },
-        select: { id: true },
-      })
-    : null;
+  const replacementFor = mapped.order.isReplacement ? await findReplacedOrder({ storeId: store.id, customerEmail: mapped.order.customerEmail, orderDate: mapped.order.orderDate }) : null;
   const order = { ...mapped.order, eurRate: await eurRate(mapped.order.currency, mapped.order.orderDate), replacementForId: replacementFor?.id ?? null };
   await prisma.$transaction(async (tx) => {
     const { id } = await tx.order.upsert({

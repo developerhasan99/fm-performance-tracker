@@ -104,6 +104,8 @@ test("money, cancellation, chargebacks and replacement detection", () => {
   assert.equal(paid.isReplacement, false);
   assert.equal(mapShopifyOrder({ ...base, totalPriceSet: { shopMoney: { amount: "0.00" } } }, sla).order.isReplacement, true);
   assert.equal(mapShopifyOrder({ ...base, totalPriceSet: { shopMoney: { amount: "9.00" } }, tags: ["Ersatz"] }, sla).order.isReplacement, true);
+  assert.equal(mapShopifyOrder({ ...base, totalPriceSet: { shopMoney: { amount: "0.00" } }, tags: ["sample-request", "trybe"] }, sla).order.isReplacement, false);
+  assert.equal(mapShopifyOrder({ ...base, totalPriceSet: { shopMoney: { amount: "0.00" } }, tags: ["trybe", "Replacement Package"] }, sla).order.isReplacement, true);
   const cancelled = mapShopifyOrder({ ...base, cancelledAt: "2026-10-02T00:00:00Z", cancelReason: "CUSTOMER", totalPriceSet: { shopMoney: { amount: "0.00" } } }, sla).order;
   assert.equal(cancelled.cancelReason, "CUSTOMER");
   assert.equal(cancelled.isReplacement, false);

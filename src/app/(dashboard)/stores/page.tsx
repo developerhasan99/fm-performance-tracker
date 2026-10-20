@@ -19,7 +19,7 @@ export default async function StoresPage({ searchParams }: { searchParams: Promi
   const redirectUri = `${await appUrl()}/api/shopify/callback`;
   const syncHours = Number(process.env.SHOPIFY_SYNC_HOURS ?? 3);
   const storeRows = await getPrisma().shopifyStore.findMany({
-    select: { id: true, name: true, shopDomain: true, customDomain: true, importOrdersFrom: true, accessToken: true, lastSyncedAt: true, lastSyncError: true, dispatchSlaDays: true, deliverySlaDays: true, reshipCostCents: true, chargebackFeeCents: true, ticketCostCents: true, _count: { select: { orders: true } } },
+    select: { id: true, name: true, shopDomain: true, customDomain: true, importOrdersFrom: true, accessToken: true, lastSyncedAt: true, lastSyncError: true, dispatchSlaDays: true, deliverySlaDays: true, reshipCostCents: true, chargebackFeeCents: true, _count: { select: { orders: true } } },
     orderBy: { createdAt: "asc" },
   });
   const stores = storeRows.map((store) => ({ ...store, sync: getSyncProgress(store.id) }));
@@ -92,10 +92,10 @@ export default async function StoresPage({ searchParams }: { searchParams: Promi
 
       {stores.length > 0 && (
         <section className="panel table-panel">
-          <div className="panel-heading"><div><h2 className="panel-title">Cost assumptions</h2><p className="panel-description">Used for the cost of failure on the dashboard, in euros. Refunds, chargebacks and cancellations come from Shopify; these fill in what Shopify doesn&apos;t know.</p></div></div>
+          <div className="panel-heading"><div><h2 className="panel-title">Cost assumptions</h2><p className="panel-description">Used for the cost of failure on the dashboard, in euros. Refunds and chargebacks come from Shopify; these fill in what Shopify doesn&apos;t know.</p></div></div>
           <div className="table-scroll">
             <table className="data-table">
-              <thead><tr><th>Store</th><th>Reship (product + postage)</th><th>Chargeback fee</th><th>Per support ticket</th><th /></tr></thead>
+              <thead><tr><th>Store</th><th>Reship (product + postage)</th><th>Chargeback fee</th><th /></tr></thead>
               <tbody>
                 {stores.map((store) => {
                   const form = `costs-${store.id}`;
@@ -105,7 +105,6 @@ export default async function StoresPage({ searchParams }: { searchParams: Promi
                       <td className="customer-cell">{store.name}</td>
                       <td><label className="sla-field">€<input form={form} className="text-input cost-input" name="reshipCost" inputMode="decimal" defaultValue={euros(store.reshipCostCents)} aria-label={`${store.name} reship cost in euros`} required /></label></td>
                       <td><label className="sla-field">€<input form={form} className="text-input cost-input" name="chargebackFee" inputMode="decimal" defaultValue={euros(store.chargebackFeeCents)} aria-label={`${store.name} chargeback fee in euros`} required /></label></td>
-                      <td><label className="sla-field">€<input form={form} className="text-input cost-input" name="ticketCost" inputMode="decimal" defaultValue={euros(store.ticketCostCents)} aria-label={`${store.name} cost per support ticket in euros`} required /></label></td>
                       <td><ActionForm action={updateStoreCosts} id={form}><input type="hidden" name="storeId" value={store.id} /><button className="secondary-button" type="submit">Save</button></ActionForm></td>
                     </tr>
                   );

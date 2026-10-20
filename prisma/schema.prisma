@@ -97,8 +97,6 @@ model Order {
   refundCostCents     Int                @default(0)
   chargebackCostCents Int                @default(0)
   reshipCostCents     Int                @default(0)
-  supportCostCents    Int                @default(0)
-  lostRevenueCents    Int                @default(0)
   failureCostCents    Int                @default(0)
   items               OrderItem[]
   contacts            SupportContact[]
@@ -205,10 +203,9 @@ model ShopifyStore {
   importOrdersFrom     DateTime?
   dispatchSlaDays      Int             @default(2)
   deliverySlaDays      Int             @default(5)
-  // Cost-of-failure assumptions, EUR cents: one reshipment (product + postage), the fee per chargeback, handling one ticket.
+  // Cost-of-failure assumptions, EUR cents: one reshipment (product + postage) and the fee per chargeback.
   reshipCostCents      Int             @default(1000)
   chargebackFeeCents   Int             @default(1500)
-  ticketCostCents      Int             @default(200)
   // Orders updated after this moment are fetched on the next sync.
   lastSyncedAt         DateTime?
   lastSyncError        String?

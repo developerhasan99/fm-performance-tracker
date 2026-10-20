@@ -5,12 +5,11 @@ import { getPrisma } from "@/lib/prisma";
 const DAY = 24 * 60 * 60 * 1000;
 const n = (value: unknown) => Number(value ?? 0);
 
-type CostRow = { refund: number; chargeback: number; reship: number; support: number; lost: number; total: number };
+type CostRow = { refund: number; chargeback: number; reship: number; total: number };
 const COST_SQL = Prisma.sql`
   coalesce(sum(o."refundCostCents"), 0)::float8 AS refund, coalesce(sum(o."chargebackCostCents"), 0)::float8 AS chargeback,
-  coalesce(sum(o."reshipCostCents"), 0)::float8 AS reship, coalesce(sum(o."supportCostCents"), 0)::float8 AS support,
-  coalesce(sum(o."lostRevenueCents"), 0)::float8 AS lost, coalesce(sum(o."failureCostCents"), 0)::float8 AS total`;
-const costs = (row: Record<string, unknown>): CostRow => ({ refund: n(row.refund), chargeback: n(row.chargeback), reship: n(row.reship), support: n(row.support), lost: n(row.lost), total: n(row.total) });
+  coalesce(sum(o."reshipCostCents"), 0)::float8 AS reship, coalesce(sum(o."failureCostCents"), 0)::float8 AS total`;
+const costs = (row: Record<string, unknown>): CostRow => ({ refund: n(row.refund), chargeback: n(row.chargeback), reship: n(row.reship), total: n(row.total) });
 
 /**
  * Cost of failure for orders placed in the last `days` whole UTC days (today included), so every number matches
@@ -53,6 +52,14 @@ export async function getFailureReport({ days, storeId }: { days: number; storeI
   const revenue = n(totals.revenue);
   const rate = (row: Record<string, unknown>) => ({ orders: n(row.orders), failed: n(row.failed), failRate: n(row.orders) ? n(row.failed) / n(row.orders) : null, ...costs(row) });
   const byDay = new Map(daily.map((row) => [row.day.toISOString().slice(0, 10), n(row.total)]));
+  // One row per cause. A retired cause still stored on an order (until its next recompute) joins "No reason found".
+  const causeRows = new Map<Cause, { cause: Cause; label: string; failed: number } & CostRow>();
+  for (const row of causes) {
+    const cause: Cause = isCause(row.key) ? row.key : "refund_unexplained";
+    const sum = causeRows.get(cause) ?? { cause, label: CAUSES[cause], failed: 0, refund: 0, chargeback: 0, reship: 0, total: 0 };
+    const add = costs(row);
+    causeRows.set(cause, { ...sum, failed: sum.failed + n(row.failed), refund: sum.refund + add.refund, chargeback: sum.chargeback + add.chargeback, reship: sum.reship + add.reship, total: sum.total + add.total });
+  }
 
   return {
     from: start.toISOString().slice(0, 10),
@@ -63,7 +70,7 @@ export async function getFailureReport({ days, storeId }: { days: number; storeI
     missingMoney: n(totals.missingMoney),
     total,
     previousTotal: n(previous.orders) >= 10 ? n(previous.total) : null,
-    causes: causes.map((row) => ({ cause: (isCause(row.key) ? row.key : "enquiry") as Cause, label: isCause(row.key) ? CAUSES[row.key] : String(row.key), failed: n(row.failed), ...costs(row) })),
+    causes: [...causeRows.values()].sort((a, b) => b.total - a.total),
     stores: stores.map((row) => ({ id: String(row.key), label: String(row.label), revenue: n(row.revenue), ...rate(row) })),
     carriers: carriers.map((row) => ({ key: String(row.key), label: String(row.key), ...rate(row) })),
     countries: countries.map((row) => ({ key: String(row.key), label: countryName(String(row.key)), ...rate(row) })),
