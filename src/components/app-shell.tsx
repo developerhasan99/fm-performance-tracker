@@ -1,6 +1,6 @@
 "use client";
 
-import { ClipboardList, Headset, LayoutDashboard, LifeBuoy, LogOut, PackageCheck, Store, Users } from "lucide-react";
+import { ClipboardList, Headset, LayoutDashboard, LifeBuoy, LogOut, PackageCheck, ReceiptText, Store, Users } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Suspense, type ReactNode } from "react";
@@ -15,6 +15,7 @@ const navigationGroups = [
     items: [
       { href: "/", label: "Overview", icon: LayoutDashboard, needsDatabase: false },
       { href: "/orders", label: "Orders", icon: ClipboardList, needsDatabase: false },
+      { href: "/orders/refunds", label: "Refunds", icon: ReceiptText, needsDatabase: true },
       { href: "/tickets", label: "Tickets", icon: LifeBuoy, needsDatabase: true },
     ],
   },
@@ -60,7 +61,7 @@ export function AppShell({ children, isDemoMode, sources, user }: { children: Re
                 <div className="workspace-label" id={`nav-${group.label}`}>{group.label}</div>
                 <div className="nav-list" role="list" aria-labelledby={`nav-${group.label}`}>
                   {items.map(({ href, label, icon: Icon }) => (
-                    <Link className={`nav-link${isActive(href) ? " active" : ""}`} href={href} key={href} role="listitem" aria-current={isActive(href) ? "page" : undefined}>
+                    <Link className={`nav-link${current.href === href ? " active" : ""}`} href={href} key={href} role="listitem" aria-current={current.href === href ? "page" : undefined}>
                       <Icon size={15} strokeWidth={1.8} />{label}
                     </Link>
                   ))}

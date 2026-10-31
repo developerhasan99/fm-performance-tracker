@@ -110,7 +110,7 @@ export const orderStatuses: FulfillmentStatus[] = ["placed", "processing", "in_t
 
 // "YYYY-MM-DD" from <input type="date">, or undefined if missing/invalid.
 // ponytail: days are UTC, so UK summer time shifts the boundary by an hour; use the shop's timezone if that matters.
-const parseDay = (value?: string) => (value && /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(value)) ? value : undefined);
+export const parseDay = (value?: string) => (value && /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(value)) ? value : undefined);
 
 export type OrderParams = { q?: string; status?: string; store?: string; noShipping?: string; from?: string; to?: string; cause?: string; cost?: string; carrier?: string; sku?: string; country?: string; stage?: string };
 

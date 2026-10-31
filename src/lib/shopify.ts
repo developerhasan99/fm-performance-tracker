@@ -104,7 +104,7 @@ const ORDERS_QUERY = `query Orders($cursor: String, $query: String) {
       id name email createdAt cancelledAt cancelReason displayFulfillmentStatus displayFinancialStatus currencyCode tags
       totalPriceSet { shopMoney { amount } }
       totalRefundedSet { shopMoney { amount } }
-      refunds { createdAt }
+      refunds { id createdAt note totalRefundedSet { shopMoney { amount } } }
       disputes { initiatedAs status }
       shippingAddress { name countryCodeV2 }
       billingAddress { name }
@@ -114,6 +114,9 @@ const ORDERS_QUERY = `query Orders($cursor: String, $query: String) {
     }
   }
 }`;
+
+export type ShopifyRefund = { id: string; createdAt: string | null; note: string | null; totalRefundedSet: { shopMoney: { amount: string } } };
+type RefundEvent = { createdAt: string; author?: string | null };
 
 export type ShopifyOrder = {
   id: string;
@@ -128,7 +131,7 @@ export type ShopifyOrder = {
   tags?: string[];
   totalPriceSet?: { shopMoney: { amount: string } };
   totalRefundedSet?: { shopMoney: { amount: string } };
-  refunds?: { createdAt: string | null }[];
+  refunds?: ShopifyRefund[];
   disputes?: { initiatedAs: string; status: string }[];
   shippingAddress: { name: string | null; countryCodeV2: string | null } | null;
   billingAddress: { name: string | null } | null;
@@ -136,6 +139,11 @@ export type ShopifyOrder = {
   lineItems: { nodes: { sku: string | null; name: string; requiresShipping: boolean; currentQuantity: number; unfulfilledQuantity: number; originalUnitPriceSet: { shopMoney: { amount: string } } }[] };
   fulfillments: { status: string; requiresShipping: boolean; createdAt: string; deliveredAt: string | null; trackingInfo: { company: string | null; number: string | null; url: string | null }[] }[];
 };
+
+// Asked per refunded order, not in ORDERS_QUERY: Refund.staffMember needs read_users, the order timeline only read_orders.
+const REFUND_EVENTS_QUERY = `query RefundEvents($id: ID!) {
+  order(id: $id) { events(first: 20, reverse: true, query: "action:refund_created") { nodes { createdAt ... on BasicEvent { author } } } }
+}`;
 
 type OrdersPage = { orders: { pageInfo: { hasNextPage: boolean; endCursor: string | null }; nodes: ShopifyOrder[] } };
 
@@ -290,12 +298,37 @@ export function mapShopifyOrder(order: ShopifyOrder, sla: { dispatchSlaDays: num
   };
 }
 
-async function saveOrder(store: ShopifyStore, shopifyOrder: ShopifyOrder) {
+/** Real refunds only: Shopify also records €0 refunds for order edits. Who did it comes from the timeline event at the same moment. */
+export function mapRefunds(refunds: ShopifyRefund[], events: RefundEvent[]) {
+  return refunds.flatMap((refund) => {
+    const amountCents = toCents(refund.totalRefundedSet.shopMoney.amount);
+    if (!refund.createdAt || amountCents <= 0) return [];
+    const refundedAt = new Date(refund.createdAt);
+    const distance = (event: RefundEvent) => Math.abs(new Date(event.createdAt).getTime() - refundedAt.getTime());
+    const event = events.filter((candidate) => distance(candidate) <= 60_000).sort((a, b) => distance(a) - distance(b))[0];
+    return [{ shopifyGid: refund.id, amountCents, note: refund.note?.trim() || null, refundedBy: event?.author ?? null, refundedAt }];
+  });
+}
+
+/** A failed lookup must not fail the order sync; the name is filled in the next time the order syncs. */
+async function refundEvents(store: ShopifyStore, token: string, orderId: string) {
+  try {
+    const data = await adminGraphql<{ order: { events: { nodes: RefundEvent[] } } | null }>(store.shopDomain, token, REFUND_EVENTS_QUERY, { id: orderId });
+    return data.order?.events.nodes ?? [];
+  } catch (error) {
+    console.error(`[shopify] ${store.shopDomain}: refund events for ${orderId}: ${error instanceof Error ? error.message : error}`);
+    return [];
+  }
+}
+
+async function saveOrder(store: ShopifyStore, token: string, shopifyOrder: ShopifyOrder) {
   const mapped = mapShopifyOrder(shopifyOrder, store);
   const { items, events } = mapped;
   const prisma = getPrisma();
   const replacementFor = mapped.order.isReplacement ? await findReplacedOrder({ storeId: store.id, customerEmail: mapped.order.customerEmail, orderDate: mapped.order.orderDate }) : null;
   const order = { ...mapped.order, eurRate: await eurRate(mapped.order.currency, mapped.order.orderDate), replacementForId: replacementFor?.id ?? null };
+  const paidRefunds = mapRefunds(shopifyOrder.refunds ?? [], []);
+  const refunds = paidRefunds.length ? mapRefunds(shopifyOrder.refunds ?? [], await refundEvents(store, token, shopifyOrder.id)) : [];
   await prisma.$transaction(async (tx) => {
     const { id } = await tx.order.upsert({
       // The (storeId, shopifyGid) unique key is what guarantees an order is never imported twice.
@@ -309,6 +342,14 @@ async function saveOrder(store: ShopifyStore, shopifyOrder: ShopifyOrder) {
     await tx.orderItem.createMany({ data: items.map((item) => ({ ...item, orderId: id })) });
     await tx.fulfillmentEvent.deleteMany({ where: { orderId: id, source: "shopify" } });
     await tx.fulfillmentEvent.createMany({ data: events.map((event) => ({ ...event, orderId: id, source: "shopify" as const })) });
+    for (const { refundedBy, ...refund } of refunds) {
+      await tx.refund.upsert({
+        where: { shopifyGid: refund.shopifyGid },
+        create: { ...refund, refundedBy, orderId: id },
+        // Keep a known name if this sync's timeline lookup failed.
+        update: { ...refund, ...(refundedBy && { refundedBy }) },
+      });
+    }
   });
 }
 
@@ -336,7 +377,7 @@ export async function syncStore(storeId: string) {
       const query = `updated_at:>='${since.toISOString()}'${from ? ` AND created_at:>='${from.toISOString()}'` : ""}`;
       const page: OrdersPage = await adminGraphql<OrdersPage>(store.shopDomain, token, ORDERS_QUERY, { cursor, query });
       // Second guard in case Shopify ever ignores the created_at filter. Orders are independent, so a page saves in parallel.
-      await runInBatches(page.orders.nodes.filter((order) => !from || new Date(order.createdAt) >= from), (order) => saveOrder(store, order));
+      await runInBatches(page.orders.nodes.filter((order) => !from || new Date(order.createdAt) >= from), (order) => saveOrder(store, token, order));
       imported += page.orders.nodes.length;
       progress.imported = imported;
       cursor = page.orders.pageInfo.hasNextPage ? page.orders.pageInfo.endCursor : null;

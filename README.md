@@ -47,6 +47,10 @@ Admins add stores on the **Stores** page (Shopify domain, optional custom domain
 - App secrets and tokens are encrypted with `ENCRYPTION_KEY`. Use the same key on every machine that shares the database.
 - Shopify has no factory data, so imported orders start with factory "Unassigned"; pick/pack timestamps stay empty. Carrier collection is taken from the fulfillment time and delivery from Shopify's delivered status.
 
+## Refunds
+
+**Orders → Refunds** lists each refund from 14 September 2026 onwards, with a CSV export of the applied filters. The amount and note come from the Shopify refund; who issued it comes from the order timeline, because `Refund.staffMember` needs the restricted `read_users` scope. Refunds of €0 (order edits) are left out.
+
 ## Cost of failure
 
 The overview opens with what failed orders cost, in EUR, for orders placed in the period. Each order's cost is stored on it (`src/lib/failure.ts`, recomputed after every Shopify and Commslayer sync and when costs change):

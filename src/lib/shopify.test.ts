@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { createHmac } from "node:crypto";
 import { test } from "node:test";
-import { addWorkingDays, carrierFromShippingLine, isValidCallbackHmac, mapShopifyOrder, normalizeShopDomain, type ShopifyOrder } from "./shopify";
+import { addWorkingDays, carrierFromShippingLine, isValidCallbackHmac, mapRefunds, mapShopifyOrder, normalizeShopDomain, type ShopifyOrder } from "./shopify";
 
 test("shop domain normalization rejects look-alikes", () => {
   assert.equal(normalizeShopDomain("Acme"), "acme.myshopify.com");
@@ -29,6 +29,16 @@ const base: ShopifyOrder = {
   fulfillments: [],
 };
 const sla = { dispatchSlaDays: 2, deliverySlaDays: 5 };
+const refundAt = (createdAt: string | null, amount = "10.00", note: string | null = null) => ({ id: `gid://shopify/Refund/${createdAt}`, createdAt, note, totalRefundedSet: { shopMoney: { amount } } });
+
+test("refunds skip order edits and take their author from the matching timeline event", () => {
+  const events = [{ createdAt: "2026-10-18T03:32:43Z", author: "Ronnie" }, { createdAt: "2026-10-18T03:19:22Z", author: "Sam" }, { createdAt: "2026-10-20T00:00:00Z", author: "Far away" }];
+  const [first, second, unknown, ...rest] = mapRefunds([refundAt("2026-10-18T03:19:21Z", "20.00", "  late  "), refundAt("2026-10-18T03:32:43Z", "49.99", ""), refundAt("2026-10-19T00:00:00Z"), refundAt("2026-10-04T00:00:00Z", "0.0"), refundAt(null)], events);
+  assert.deepEqual([first.amountCents, first.note, first.refundedBy], [2000, "late", "Sam"]);
+  assert.deepEqual([second.amountCents, second.note, second.refundedBy], [4999, null, "Ronnie"]);
+  assert.equal(unknown.refundedBy, null);
+  assert.equal(rest.length, 0);
+});
 
 test("order status mapping", () => {
   const placed = mapShopifyOrder(base, sla, new Date("2026-10-02T00:00:00Z"));
@@ -94,7 +104,7 @@ test("SLA due dates skip weekends", () => {
 });
 
 test("money, cancellation, chargebacks and replacement detection", () => {
-  const paid = mapShopifyOrder({ ...base, totalPriceSet: { shopMoney: { amount: "25.00" } }, totalRefundedSet: { shopMoney: { amount: "10.00" } }, refunds: [{ createdAt: "2026-10-05T00:00:00Z" }, { createdAt: "2026-10-03T00:00:00Z" }], disputes: [{ initiatedAs: "CHARGEBACK", status: "LOST" }, { initiatedAs: "CHARGEBACK", status: "WON" }, { initiatedAs: "INQUIRY", status: "LOST" }] }, sla).order;
+  const paid = mapShopifyOrder({ ...base, totalPriceSet: { shopMoney: { amount: "25.00" } }, totalRefundedSet: { shopMoney: { amount: "10.00" } }, refunds: [refundAt("2026-10-05T00:00:00Z"), refundAt("2026-10-03T00:00:00Z")], disputes: [{ initiatedAs: "CHARGEBACK", status: "LOST" }, { initiatedAs: "CHARGEBACK", status: "WON" }, { initiatedAs: "INQUIRY", status: "LOST" }] }, sla).order;
   assert.equal(paid.totalCents, 2500);
   assert.equal(paid.refundedCents, 1000);
   assert.equal(paid.refundCount, 2);

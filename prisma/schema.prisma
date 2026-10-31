@@ -102,6 +102,7 @@ model Order {
   contacts            SupportContact[]
   events              FulfillmentEvent[]
   tickets             SupportTicket[]
+  refunds             Refund[]
   createdAt           DateTime           @default(now())
   updatedAt           DateTime           @updatedAt
 
@@ -128,6 +129,23 @@ model OrderItem {
   order           Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
   @@index([orderId])
+}
+
+// One refund on an order, from Shopify. Amount is in the shop's currency (the order's `currency`).
+model Refund {
+  id          String   @id @default(cuid())
+  // Shopify GID (gid://shopify/Refund/123), the import dedup key.
+  shopifyGid  String   @unique
+  orderId     String
+  order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  amountCents Int
+  note        String?
+  // Staff member or app named on the order timeline.
+  refundedBy  String?
+  refundedAt  DateTime
+
+  @@index([orderId])
+  @@index([refundedAt])
 }
 
 model SupportContact {
