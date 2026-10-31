@@ -3,6 +3,7 @@ import Form from "next/form";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Calendar, ChevronLeft, ChevronRight, Download, Search } from "lucide-react";
+import { NotePopover } from "@/components/note-popover";
 import { isDemoMode, requireUser } from "@/lib/auth";
 import { ORDERS_PAGE_SIZE as PAGE_SIZE, formatDate, getStoreOptions } from "@/lib/dashboard";
 import { getPrisma } from "@/lib/prisma";
@@ -61,18 +62,18 @@ export default async function RefundsPage({ searchParams }: { searchParams: Prom
       </Form>
         {refunds.length ? (
           <div className="table-scroll">
-            <table className="data-table">
+            <table className="data-table refunds-table">
               <thead><tr><th>STORE</th><th>ORDER ID</th><th>ORDER NUMBER</th><th>AMOUNT</th><th>REFUNDED</th><th>REFUNDED BY</th><th>NOTE</th></tr></thead>
               <tbody>
                 {refunds.map((refund) => (
                   <tr key={refund.id}>
-                    <td>{refund.order.store?.name ?? "—"}</td>
-                    <td>{shopifyNumericId(refund.order.shopifyGid) ?? "—"}</td>
-                    <td><Link className="order-reference" href={`/orders/${refund.order.id}`}>{refund.order.shopifyOrderId}</Link></td>
-                    <td>{formatAmount(refund.amountCents, refund.order.currency)}</td>
-                    <td>{formatDate(refund.refundedAt, { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}</td>
-                    <td>{refund.refundedBy ?? <span className="no-contact">—</span>}</td>
-                    <td className="ticket-subject">{refund.note ?? <span className="no-contact">No note</span>}</td>
+                    <td data-label="Store">{refund.order.store?.name ?? "—"}</td>
+                    <td data-label="Order ID">{shopifyNumericId(refund.order.shopifyGid) ?? "—"}</td>
+                    <td className="refund-order"><Link className="order-reference" href={`/orders/${refund.order.id}`}>{refund.order.shopifyOrderId}</Link></td>
+                    <td className="refund-amount">{formatAmount(refund.amountCents, refund.order.currency)}</td>
+                    <td data-label="Refunded">{formatDate(refund.refundedAt, { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}</td>
+                    <td data-label="Refunded by">{refund.refundedBy ?? <span className="no-contact">—</span>}</td>
+                    <td className="refund-note">{refund.note ? <NotePopover note={refund.note} /> : <span className="no-contact">No note</span>}</td>
                   </tr>
                 ))}
               </tbody>

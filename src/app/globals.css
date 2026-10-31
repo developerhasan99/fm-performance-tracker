@@ -208,3 +208,12 @@ button:disabled{opacity:.6;cursor:default}
 .segmented{height:36px;align-items:center}
 .nav-group+.nav-group .workspace-label{margin-top:26px}
 @media(max-width:760px){.sidebar nav{display:flex;flex-wrap:wrap;gap:5px}.nav-group{display:contents}}
+/* Refunds: each row becomes a card on phones, order and amount first, so nothing needs sideways scrolling. */
+@media(max-width:760px){.refunds-table thead{display:none}.refunds-table,.refunds-table tbody{display:block}.refunds-table tr{display:grid;grid-template-columns:1fr auto;gap:7px 12px;border-bottom:1px solid #f0f2ef;padding:13px 14px}.refunds-table tbody tr:last-child{border-bottom:0}.refunds-table td{display:flex;grid-column:1/-1;justify-content:space-between;gap:12px;border:0;padding:0;font-size:12px;white-space:normal;text-align:right}.refunds-table td[data-label]::before{content:attr(data-label);flex:none;color:#939c97}.refunds-table .refund-order{grid-column:1;grid-row:1;font-size:13px}.refunds-table .refund-amount{grid-column:2;grid-row:1;color:var(--ink);font-size:13px;font-weight:600}.refunds-table .refund-note{display:block;max-width:none;margin-top:3px;text-align:left;line-height:1.45}.pagination{flex-wrap:wrap}}
+.note-line{display:block;max-width:340px;overflow:hidden;border:0;background:none;color:inherit;padding:0;font:inherit;text-align:left;text-overflow:ellipsis;white-space:nowrap}
+.note-line.is-cut{cursor:pointer}.note-line.is-cut:hover,.note-line:has(+ :popover-open){color:var(--ink);text-decoration:underline}
+.note-line:focus-visible{outline:2px solid var(--green);outline-offset:2px}
+.note-popover{position:fixed;inset:auto;width:420px;max-width:calc(100vw - 16px);margin:0;overflow:visible;border:1px solid #c9d1cc;border-radius:6px;background:#fff;box-shadow:0 6px 20px rgb(23 33 27/.14);color:var(--ink);padding:10px 12px;font-size:12px;line-height:1.45;white-space:normal;overflow-wrap:anywhere}
+.note-popover::before{content:"";position:absolute;top:-6px;left:var(--arrow-left,16px);width:10px;height:10px;border-top:1px solid #c9d1cc;border-left:1px solid #c9d1cc;background:#fff;transform:rotate(45deg)}
+.note-popover[data-above="true"]::before{top:auto;bottom:-6px;transform:rotate(225deg)}
+@media(max-width:760px){.note-line{max-width:none;white-space:normal;overflow-wrap:anywhere}}
