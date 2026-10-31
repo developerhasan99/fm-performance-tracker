@@ -161,7 +161,7 @@ button:disabled{opacity:.6;cursor:default}
 @media(prefers-reduced-motion:reduce){.sync-spinner{animation:none}}
 .sla-field .date-input{width:auto}
 .tracking-link{color:var(--green);text-decoration:underline}
-.ticket-subject{max-width:340px;overflow-wrap:anywhere}
+.ticket-subject{max-width:340px;overflow-wrap:anywhere;white-space:normal}
 .label-list{display:flex;flex-wrap:wrap;gap:4px;max-width:260px}
 .ticket-label{border-radius:3px;background:#f1f3f0;color:#5f6b64;padding:2px 6px;font-size:9px;white-space:nowrap}
 .ticket-status{border-radius:3px;background:#f1f2ef;color:#77817b;padding:3px 7px;font-size:9px;font-weight:600;text-transform:capitalize}
