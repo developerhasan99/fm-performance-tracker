@@ -160,23 +160,19 @@ export function parseOrderParams(params: OrderParams, stores: { id: string }[]) 
   };
 }
 
-/** One page of orders plus the total match count, or every match when no page is given. */
-export async function getOrders({ search, status, storeId, includeNoShipping, from, before, cause, cost, carrier, sku, country, notDispatched, page }: OrderFilters) {
-  const skip = page ? (page - 1) * ORDERS_PAGE_SIZE : 0;
-  const take = page ? ORDERS_PAGE_SIZE : undefined;
-  if (isDemoMode()) {
-    const query = search.trim().toLowerCase();
-    const matches = demoOrders.filter((order) => {
-      const matchesSearch = !query || [
-        order.shopifyOrderId, order.customerName, order.customerEmail, order.factoryName, order.carrier,
-      ].some((value) => value.toLowerCase().includes(query));
-      return matchesSearch && (!status || order.status === status) && !storeId && (includeNoShipping || order.requiresShipping) && (!from || order.orderDate >= from) && (!before || order.orderDate < before);
-    });
-    return { orders: take ? matches.slice(skip, skip + take) : matches, total: matches.length };
-  }
+function demoMatches({ search, status, storeId, includeNoShipping, from, before }: OrderFilters) {
+  const query = search.trim().toLowerCase();
+  return demoOrders.filter((order) => {
+    const matchesSearch = !query || [
+      order.shopifyOrderId, order.customerName, order.customerEmail, order.factoryName, order.carrier,
+    ].some((value) => value.toLowerCase().includes(query));
+    return matchesSearch && (!status || order.status === status) && !storeId && (includeNoShipping || order.requiresShipping) && (!from || order.orderDate >= from) && (!before || order.orderDate < before);
+  });
+}
 
+function orderWhere({ search, status, storeId, includeNoShipping, from, before, cause, cost, carrier, sku, country, notDispatched }: OrderFilters): Prisma.OrderWhereInput {
   const query = search.trim();
-  const where: Prisma.OrderWhereInput = {
+  return {
     ...(status ? { status } : {}),
     ...(storeId ? { storeId } : {}),
     ...(includeNoShipping ? {} : { requiresShipping: true }),
@@ -197,12 +193,52 @@ export async function getOrders({ search, status, storeId, includeNoShipping, fr
       { store: { name: { contains: query, mode: "insensitive" } } },
     ] } : {}),
   };
+}
+
+/** One page of orders plus the total match count, or every match when no page is given. */
+export async function getOrders(filters: OrderFilters) {
+  const { page } = filters;
+  const skip = page ? (page - 1) * ORDERS_PAGE_SIZE : 0;
+  const take = page ? ORDERS_PAGE_SIZE : undefined;
+  if (isDemoMode()) {
+    const matches = demoMatches(filters);
+    return { orders: take ? matches.slice(skip, skip + take) : matches, total: matches.length };
+  }
+
+  const where = orderWhere(filters);
   const prisma = getPrisma();
   const [orders, total] = await Promise.all([
     prisma.order.findMany({ where, include: orderInclude, orderBy: [{ orderDate: "desc" }, { id: "desc" }], skip, take }),
     prisma.order.count({ where }),
   ]);
   return { orders: orders.map(toSummary), total };
+}
+
+type StatsOrder = { status: FulfillmentStatus; totalCents: number; eurRate: number | null; failureCostCents: number; deliveredAt: Date | null; deliveryDueAt: Date };
+
+export function orderStats(orders: StatsOrder[]) {
+  const live = orders.filter((order) => order.status !== "cancelled");
+  const delivered = orders.filter((order) => order.deliveredAt);
+  return {
+    cancelled: orders.length - live.length,
+    // Same revenue rule as the failure report: cancelled orders don't count, and neither do those without an ECB rate.
+    revenueCents: live.reduce((sum, order) => sum + order.totalCents * (order.eurRate ?? 0), 0),
+    missingRate: live.filter((order) => order.eurRate === null).length,
+    failureCostCents: orders.reduce((sum, order) => sum + order.failureCostCents, 0),
+    delivered: delivered.length,
+    deliveredOnTime: delivered.filter((order) => order.deliveredAt! <= order.deliveryDueAt).length,
+  };
+}
+
+/** Stats for every order matching the filters, not just the current page. */
+// ponytail: aggregates in JS (same load as the CSV export, minus relations); move to SQL if the page gets slow at this order volume.
+export async function getOrderStats(filters: OrderFilters) {
+  // Demo orders are all GBP and carry no ECB rate, so they use a fixed illustrative one.
+  if (isDemoMode()) return orderStats(demoMatches(filters).map((order) => ({ ...order, eurRate: 1.15 })));
+  return orderStats(await getPrisma().order.findMany({
+    where: orderWhere(filters),
+    select: { status: true, totalCents: true, eurRate: true, failureCostCents: true, deliveredAt: true, deliveryDueAt: true },
+  }));
 }
 
 export async function getStoreOptions() {

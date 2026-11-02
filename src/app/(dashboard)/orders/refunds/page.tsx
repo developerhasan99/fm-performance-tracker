@@ -2,12 +2,13 @@ import type { Metadata } from "next";
 import Form from "next/form";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Calendar, ChevronLeft, ChevronRight, Download, Search } from "lucide-react";
+import { Calendar, ChevronLeft, ChevronRight, Download, Euro, MessageSquareOff, ReceiptText, Scale, Search } from "lucide-react";
+import { MetricCard } from "@/components/metrics";
 import { NotePopover } from "@/components/note-popover";
 import { isDemoMode, requireUser } from "@/lib/auth";
-import { ORDERS_PAGE_SIZE as PAGE_SIZE, formatDate, getStoreOptions } from "@/lib/dashboard";
+import { ORDERS_PAGE_SIZE as PAGE_SIZE, formatDate, formatEuro, getStoreOptions } from "@/lib/dashboard";
 import { getPrisma } from "@/lib/prisma";
-import { parseRefundParams, refundSelect, shopifyNumericId, type RefundParams } from "@/lib/refunds";
+import { parseRefundParams, refundSelect, refundStats, refundStatsSelect, shopifyNumericId, type RefundParams } from "@/lib/refunds";
 
 export const metadata: Metadata = { title: "Refunds" };
 export const dynamic = "force-dynamic";
@@ -23,10 +24,13 @@ export default async function RefundsPage({ searchParams }: { searchParams: Prom
   const stores = await getStoreOptions();
   const { query, storeId, from, to, where, search } = parseRefundParams(params, stores);
   const prisma = getPrisma();
-  const [refunds, total] = await Promise.all([
+  const [refunds, total, statsRows] = await Promise.all([
     prisma.refund.findMany({ where, select: refundSelect, orderBy: [{ refundedAt: "desc" }, { id: "desc" }], skip: (page - 1) * PAGE_SIZE, take: PAGE_SIZE }),
     prisma.refund.count({ where }),
+    // ponytail: aggregates in JS, like the orders stats; move to SQL if the page gets slow at this volume.
+    prisma.refund.findMany({ where, select: refundStatsSelect }),
   ]);
+  const stats = refundStats(statsRows);
   const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const pageHref = (target: number) => {
     const pageSearch = new URLSearchParams(search);
@@ -43,6 +47,14 @@ export default async function RefundsPage({ searchParams }: { searchParams: Prom
           {total > 0 && <a className="secondary-button" href={`/orders/refunds/export${search.size ? `?${search}` : ""}`} download title="Download every refund matching the applied filters"><Download size={13} />Export CSV</a>}
         </div>
       </div>
+      {total > 0 && (
+        <div className="metrics-grid">
+          <MetricCard title="Refunds" value={total.toLocaleString("en-GB")} footnote={`Across ${stats.orders.toLocaleString("en-GB")} ${stats.orders === 1 ? "order" : "orders"}`} icon={ReceiptText} />
+          <MetricCard title="Amount refunded" value={formatEuro(stats.refundedCents)} footnote={stats.missingRate ? `Excludes ${stats.missingRate.toLocaleString("en-GB")} without an exchange rate` : "At order-date exchange rates"} icon={Euro} />
+          <MetricCard title="Average refund" value={formatEuro(stats.averageCents)} footnote="Per refund" icon={Scale} />
+          <MetricCard title="Without a note" value={stats.withoutNote.toLocaleString("en-GB")} footnote={`${Math.round((stats.withoutNote / total) * 100)}% of refunds`} icon={MessageSquareOff} />
+        </div>
+      )}
       <section className="panel table-panel">
       <Form className="filter-bar" action="/orders/refunds" key={search.toString()}>
         <label className="search-field"><Search size={14} /><input name="q" type="search" placeholder="Search order, staff member or note" defaultValue={query} aria-label="Search refunds" /></label>

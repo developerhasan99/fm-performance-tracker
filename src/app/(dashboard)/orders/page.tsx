@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
 import Form from "next/form";
 import Link from "next/link";
-import { Calendar, ChevronLeft, ChevronRight, Download, Search, X } from "lucide-react";
+import { Boxes, Calendar, CheckCircle2, ChevronLeft, ChevronRight, Download, Euro, PackageX, Search, X } from "lucide-react";
+import { MetricCard } from "@/components/metrics";
 import { OrdersTable } from "@/components/orders-table";
-import { ORDERS_PAGE_SIZE, getOrders, getStoreOptions, orderStatuses, parseOrderParams, type OrderParams } from "@/lib/dashboard";
+import { ORDERS_PAGE_SIZE, formatEuro, getOrderStats, getOrders, getStoreOptions, orderStatuses, parseOrderParams, type OrderParams } from "@/lib/dashboard";
 import { requireUser } from "@/lib/auth";
 
 export const metadata: Metadata = { title: "Orders" };
@@ -16,7 +17,7 @@ export default async function OrdersPage({ searchParams }: { searchParams: Promi
   const stores = await getStoreOptions();
   const { query, status, storeId, noShipping, from, to, drill, filters, search } = parseOrderParams(params, stores);
   const { includeNoShipping } = filters;
-  const { orders, total } = await getOrders({ ...filters, page });
+  const [{ orders, total }, stats] = await Promise.all([getOrders({ ...filters, page }), getOrderStats(filters)]);
   const hasFilters = Boolean(query || status || storeId || includeNoShipping || from || to || drill.length);
   const without = (key: string) => {
     const rest = new URLSearchParams(search);
@@ -40,6 +41,14 @@ export default async function OrdersPage({ searchParams }: { searchParams: Promi
         </div>
       </div>
       {(process.env.DASHBOARD_DEMO_MODE === "true" || orders.some((order) => order.isSampleData)) && <div className="sample-banner" role="status"><span><strong>Sample data included</strong> — seeded rows are illustrative; connect your systems for live reporting.</span></div>}
+      {total > 0 && (
+        <div className="metrics-grid">
+          <MetricCard title="Orders" value={total.toLocaleString("en-GB")} footnote={`${stats.cancelled.toLocaleString("en-GB")} cancelled`} icon={Boxes} />
+          <MetricCard title="Revenue" value={formatEuro(stats.revenueCents)} footnote={stats.missingRate ? `Excludes cancelled and ${stats.missingRate.toLocaleString("en-GB")} without an exchange rate` : "Excludes cancelled orders"} icon={Euro} />
+          <MetricCard title="Delivered on time" value={stats.delivered ? `${Math.round((stats.deliveredOnTime / stats.delivered) * 100)}%` : "—"} footnote={`${stats.deliveredOnTime.toLocaleString("en-GB")} of ${stats.delivered.toLocaleString("en-GB")} delivered orders`} icon={CheckCircle2} />
+          <MetricCard title="Cost of failure" value={formatEuro(stats.failureCostCents)} footnote={stats.revenueCents ? `${((stats.failureCostCents / stats.revenueCents) * 100).toFixed(1)}% of revenue` : "Refunds, chargebacks and reships"} icon={PackageX} />
+        </div>
+      )}
       <section className="panel table-panel">
       <Form className="filter-bar" action="/orders" key={search.toString()}>
         {/* Drill-down filters from the dashboard ride along when the visible filters are applied. */}

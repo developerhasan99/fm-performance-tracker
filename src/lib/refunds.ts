@@ -33,3 +33,19 @@ export const refundSelect = {
   id: true, amountCents: true, note: true, refundedBy: true, refundedAt: true,
   order: { select: { id: true, shopifyOrderId: true, shopifyGid: true, currency: true, store: { select: { name: true } } } },
 } satisfies Prisma.RefundSelect;
+
+export const refundStatsSelect = { amountCents: true, note: true, orderId: true, order: { select: { eurRate: true } } } satisfies Prisma.RefundSelect;
+
+type StatsRefund = { amountCents: number; note: string | null; orderId: string; order: { eurRate: number | null } };
+
+export function refundStats(refunds: StatsRefund[]) {
+  const rated = refunds.filter((refund) => refund.order.eurRate !== null);
+  const refundedCents = rated.reduce((sum, refund) => sum + refund.amountCents * refund.order.eurRate!, 0);
+  return {
+    orders: new Set(refunds.map((refund) => refund.orderId)).size,
+    refundedCents,
+    averageCents: rated.length ? refundedCents / rated.length : 0,
+    missingRate: refunds.length - rated.length,
+    withoutNote: refunds.filter((refund) => !refund.note).length,
+  };
+}

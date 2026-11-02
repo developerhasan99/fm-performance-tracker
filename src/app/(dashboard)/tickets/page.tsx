@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
+import type { Prisma } from "@prisma/client";
 import Form from "next/form";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ChevronLeft, ChevronRight, Download, Search } from "lucide-react";
+import { CheckCircle2, ChevronLeft, ChevronRight, Download, Hourglass, Inbox, PackageSearch, Search } from "lucide-react";
+import { MetricCard } from "@/components/metrics";
 import { isDemoMode, requireUser } from "@/lib/auth";
 import { formatDate, issueLabels } from "@/lib/dashboard";
 import { getPrisma } from "@/lib/prisma";
@@ -24,7 +26,8 @@ export default async function TicketsPage({ searchParams }: { searchParams: Prom
     prisma.shopifyStore.findMany({ select: { id: true, name: true }, orderBy: { name: "asc" } }),
   ]);
   const { query, status, showAll, accountId, storeId, link, category, where, search } = parseTicketParams(params, accounts, stores);
-  const [tickets, total] = await Promise.all([
+  const matching = (extra: Prisma.SupportTicketWhereInput) => prisma.supportTicket.count({ where: { AND: [where, extra] } });
+  const [tickets, total, linked, open, resolved, wismo, refundRequests] = await Promise.all([
     prisma.supportTicket.findMany({
       where,
       select: { id: true, externalId: true, displayId: true, subject: true, status: true, labels: true, contactReason: true, ticketCreatedAt: true, category: true, refundRequested: true, wismo: true, matchMethod: true, subjectNumbers: true, messageNumbers: true, messagesCheckedAt: true, account: { select: { name: true } }, store: { select: { name: true } }, order: { select: { id: true, shopifyOrderId: true } } },
@@ -33,7 +36,13 @@ export default async function TicketsPage({ searchParams }: { searchParams: Prom
       take: PAGE_SIZE,
     }),
     prisma.supportTicket.count({ where }),
+    matching({ orderId: { not: null } }),
+    matching({ status: { in: ["open", "pending", "snoozed"] } }),
+    matching({ status: "resolved" }),
+    matching({ wismo: true }),
+    matching({ refundRequested: true }),
   ]);
+  const count = (value: number) => value.toLocaleString("en-GB");
   const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const pageHref = (target: number) => {
     const pageSearch = new URLSearchParams(search);
@@ -50,6 +59,14 @@ export default async function TicketsPage({ searchParams }: { searchParams: Prom
           {total > 0 && <a className="secondary-button" href={`/tickets/export${search.size ? `?${search}` : ""}`} download title="Download every ticket matching the applied filters"><Download size={13} />Export CSV</a>}
         </div>
       </div>
+      {total > 0 && (
+        <div className="metrics-grid">
+          <MetricCard title="Tickets" value={count(total)} footnote={`${count(linked)} linked to an order`} icon={Inbox} />
+          <MetricCard title="Still open" value={count(open)} footnote="Open, pending or snoozed" icon={Hourglass} />
+          <MetricCard title="Resolved" value={`${Math.round((resolved / total) * 100)}%`} footnote={`${count(resolved)} of ${count(total)} tickets`} icon={CheckCircle2} />
+          <MetricCard title="Where is my order" value={count(wismo)} footnote={`${count(refundRequests)} refund ${refundRequests === 1 ? "request" : "requests"}`} icon={PackageSearch} />
+        </div>
+      )}
       <section className="panel table-panel">
       <Form className="filter-bar" action="/tickets" key={search.toString()}>
         <label className="search-field"><Search size={14} /><input name="q" type="search" placeholder="Search subject, reason, label or ticket #" defaultValue={query} aria-label="Search tickets" /></label>
