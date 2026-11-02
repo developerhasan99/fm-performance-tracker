@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { AlertCircle, ArrowDownRight, ArrowRight, ArrowUpRight, Boxes, CheckCircle2, Clock3, Euro, Hourglass, Inbox, LifeBuoy, MapPinned, PackageX, Route, ScanLine, Target, Timer, TriangleAlert, Truck } from "lucide-react";
 import { ColumnChart } from "@/components/column-chart";
-import { MetricCard } from "@/components/metrics";
+import { BarList, MetricCard } from "@/components/metrics";
 import { StoreSwitcher } from "@/components/store-switcher";
 import { requireUser } from "@/lib/auth";
 import { formatDate, formatEuro } from "@/lib/dashboard";
@@ -25,20 +25,6 @@ function Delta({ value, unit = "%", goodWhen }: { value: number | null; unit?: s
   const Icon = up ? ArrowUpRight : ArrowDownRight;
   const shown = unit === "h" ? duration(Math.abs(value)) : `${Math.abs(Math.round(value))}${unit}`;
   return <span className={`delta ${up === (goodWhen === "up") ? "good" : "bad"}`}><Icon size={11} />{up ? "+" : "−"}{shown}</span>;
-}
-
-/** Horizontal bars; a row with an href opens the matching orders or tickets. */
-function BarList({ rows, empty, format = number }: { rows: { label: string; count: number; href?: string }[]; empty: string; format?: (value: number) => string }) {
-  if (!rows.some((row) => row.count)) return <p className="panel-description">{empty}</p>;
-  const max = Math.max(1, ...rows.map((row) => row.count));
-  return (
-    <div className="issue-list metric-bars">
-      {rows.map((row) => {
-        const content = <><span className="issue-name">{row.label}</span><div className="issue-track"><div className="issue-fill" style={{ width: `${row.count / max * 100}%` }} /></div><span className="issue-count">{format(row.count)}</span></>;
-        return row.href && row.count ? <Link className="issue-row bar-link" key={row.label} href={row.href}>{content}</Link> : <div className="issue-row" key={row.label}>{content}</div>;
-      })}
-    </div>
-  );
 }
 
 function SectionHeading({ title, description, icon: Icon }: { title: string; description: string; icon: typeof Boxes }) {

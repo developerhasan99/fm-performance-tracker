@@ -185,6 +185,7 @@ function orderWhere({ search, status, storeId, includeNoShipping, from, before, 
     ...(notDispatched && { carrierCollectedAt: null, dispatchDueAt: { lt: new Date() }, status: { not: "cancelled" as const } }),
     ...(query ? { OR: [
       { shopifyOrderId: { contains: query, mode: "insensitive" } },
+      { shopifyGid: { endsWith: `/${query}` } },
       { customerName: { contains: query, mode: "insensitive" } },
       { customerEmail: { contains: query, mode: "insensitive" } },
       { factoryName: { contains: query, mode: "insensitive" } },

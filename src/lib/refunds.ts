@@ -34,18 +34,27 @@ export const refundSelect = {
   order: { select: { id: true, shopifyOrderId: true, shopifyGid: true, currency: true, store: { select: { name: true } } } },
 } satisfies Prisma.RefundSelect;
 
-export const refundStatsSelect = { amountCents: true, note: true, orderId: true, order: { select: { eurRate: true } } } satisfies Prisma.RefundSelect;
+export const refundStatsSelect = { amountCents: true, note: true, orderId: true, refundedAt: true, order: { select: { eurRate: true, store: { select: { id: true, name: true } } } } } satisfies Prisma.RefundSelect;
 
-type StatsRefund = { amountCents: number; note: string | null; orderId: string; order: { eurRate: number | null } };
+type StatsRefund = { amountCents: number; note: string | null; orderId: string; order: { eurRate: number | null; store: { id: string; name: string } | null } };
 
 export function refundStats(refunds: StatsRefund[]) {
   const rated = refunds.filter((refund) => refund.order.eurRate !== null);
   const refundedCents = rated.reduce((sum, refund) => sum + refund.amountCents * refund.order.eurRate!, 0);
+  const stores = new Map<string, { id: string | null; name: string; cents: number }>();
+  for (const refund of rated) {
+    const store = refund.order.store;
+    const row = stores.get(store?.id ?? "") ?? { id: store?.id ?? null, name: store?.name ?? "No store", cents: 0 };
+    row.cents += refund.amountCents * refund.order.eurRate!;
+    stores.set(row.id ?? "", row);
+  }
   return {
     orders: new Set(refunds.map((refund) => refund.orderId)).size,
     refundedCents,
     averageCents: rated.length ? refundedCents / rated.length : 0,
     missingRate: refunds.length - rated.length,
     withoutNote: refunds.filter((refund) => !refund.note).length,
+    /** Euros refunded per store, largest first. */
+    byStore: [...stores.values()].sort((a, b) => b.cents - a.cents),
   };
 }

@@ -3,6 +3,7 @@ import type { FulfillmentStatus, IssueCategory } from "@prisma/client";
 export type OrderSummary = {
   id: string;
   shopifyOrderId: string;
+  shopifyGid?: string | null;
   customerName: string;
   customerEmail: string;
   market: string;

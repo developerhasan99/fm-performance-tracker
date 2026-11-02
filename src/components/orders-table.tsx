@@ -4,6 +4,7 @@ import { StatusBadge } from "@/components/status-badge";
 import { formatDate, formatEuro } from "@/lib/dashboard";
 import { CAUSES, isCause } from "@/lib/failure";
 import type { OrderSummary } from "@/lib/demo-data";
+import { shopifyNumericId } from "@/lib/refunds";
 
 export function OrdersTable({ orders }: { orders: OrderSummary[] }) {
   if (!orders.length) return <div className="empty-state">No orders match these filters.</div>;
@@ -11,10 +12,11 @@ export function OrdersTable({ orders }: { orders: OrderSummary[] }) {
   return (
     <div className="table-scroll">
       <table className="data-table">
-        <thead><tr><th>ORDER</th><th>CUSTOMER</th><th>STORE</th><th>FACTORY</th><th>ORDERED</th><th>STATUS</th><th>SUPPORT</th><th>COST OF FAILURE</th></tr></thead>
+        <thead><tr><th>ORDER ID</th><th>ORDER NUMBER</th><th>CUSTOMER</th><th>STORE</th><th>FACTORY</th><th>ORDERED</th><th>STATUS</th><th>SUPPORT</th><th>COST OF FAILURE</th></tr></thead>
         <tbody>
           {orders.map((order) => (
             <tr className="row-link" key={order.id}>
+              <td>{shopifyNumericId(order.shopifyGid ?? null) ?? "—"}</td>
               <td><Link className="order-reference" href={`/orders/${order.id}`}>{order.shopifyOrderId}</Link></td>
               <td className="customer-cell">{order.customerName}</td>
               <td>{order.store?.name ?? "—"}</td>

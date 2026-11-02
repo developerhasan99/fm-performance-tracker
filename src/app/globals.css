@@ -217,3 +217,4 @@ button:disabled{opacity:.6;cursor:default}
 .note-popover::before{content:"";position:absolute;top:-6px;left:var(--arrow-left,16px);width:10px;height:10px;border-top:1px solid #c9d1cc;border-left:1px solid #c9d1cc;background:#fff;transform:rotate(45deg)}
 .note-popover[data-above="true"]::before{top:auto;bottom:-6px;transform:rotate(225deg)}
 @media(max-width:760px){.note-line{max-width:none;white-space:normal;overflow-wrap:anywhere}}
+.refund-charts .issue-row{grid-template-columns:minmax(0,110px) minmax(0,1fr) auto}.refund-charts .issue-track{width:auto;height:6px}.refund-charts .issue-list{gap:14px}

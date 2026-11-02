@@ -3,10 +3,12 @@ import Form from "next/form";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Calendar, ChevronLeft, ChevronRight, Download, Euro, MessageSquareOff, ReceiptText, Scale, Search } from "lucide-react";
-import { MetricCard } from "@/components/metrics";
+import { ColumnChart } from "@/components/column-chart";
+import { BarList, MetricCard } from "@/components/metrics";
 import { NotePopover } from "@/components/note-popover";
 import { isDemoMode, requireUser } from "@/lib/auth";
 import { ORDERS_PAGE_SIZE as PAGE_SIZE, formatDate, formatEuro, getStoreOptions } from "@/lib/dashboard";
+import { dailyCounts } from "@/lib/overview";
 import { getPrisma } from "@/lib/prisma";
 import { parseRefundParams, refundSelect, refundStats, refundStatsSelect, shopifyNumericId, type RefundParams } from "@/lib/refunds";
 
@@ -31,6 +33,17 @@ export default async function RefundsPage({ searchParams }: { searchParams: Prom
     prisma.refund.findMany({ where, select: refundStatsSelect }),
   ]);
   const stats = refundStats(statsRows);
+  // Every day from the start of the filter to its end (or today), so quiet days show as gaps.
+  // ponytail: one column per day; bucket by week if people pick ranges of many months.
+  const DAY = 24 * 60 * 60 * 1000;
+  const end = new Date(Math.min(Date.now(), to ? Date.parse(`${to}T00:00:00Z`) : Infinity));
+  const days = Math.max(1, Math.floor((end.getTime() - Date.parse(`${from}T00:00:00Z`)) / DAY) + 1);
+  const daily = dailyCounts(statsRows.map((refund) => refund.refundedAt), days, end).map((day) => ({ date: day.date.toISOString(), count: day.count }));
+  const storeHref = (id: string) => {
+    const storeSearch = new URLSearchParams(search);
+    storeSearch.set("store", id);
+    return `/orders/refunds?${storeSearch}`;
+  };
   const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const pageHref = (target: number) => {
     const pageSearch = new URLSearchParams(search);
@@ -53,6 +66,18 @@ export default async function RefundsPage({ searchParams }: { searchParams: Prom
           <MetricCard title="Amount refunded" value={formatEuro(stats.refundedCents)} footnote={stats.missingRate ? `Excludes ${stats.missingRate.toLocaleString("en-GB")} without an exchange rate` : "At order-date exchange rates"} icon={Euro} />
           <MetricCard title="Average refund" value={formatEuro(stats.averageCents)} footnote="Per refund" icon={Scale} />
           <MetricCard title="Without a note" value={stats.withoutNote.toLocaleString("en-GB")} footnote={`${Math.round((stats.withoutNote / total) * 100)}% of refunds`} icon={MessageSquareOff} />
+        </div>
+      )}
+      {total > 0 && (
+        <div className="lower-grid refund-charts">
+          <section className="panel">
+            <div className="panel-heading"><div><h2 className="panel-title">Refunds per day</h2><p className="panel-description">By refund date · hover a day for its count</p></div></div>
+            <ColumnChart data={daily} unit={["refund", "refunds"]} label="Refunds per day for the applied filters" />
+          </section>
+          <section className="panel">
+            <div className="panel-heading"><div><h2 className="panel-title">Refunded by store</h2><p className="panel-description">In euros{stores.length > 1 ? " · select a store to filter" : ""}</p></div></div>
+            <BarList rows={stats.byStore.map((row) => ({ label: row.name, count: Math.round(row.cents), href: row.id && stores.length > 1 ? storeHref(row.id) : undefined }))} format={formatEuro} empty="No refunds with an exchange rate." />
+          </section>
         </div>
       )}
       <section className="panel table-panel">
