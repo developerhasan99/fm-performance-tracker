@@ -21,3 +21,14 @@ test("totals skip cancelled revenue and missing rates; on-time counts delivered 
   assert.deepEqual([stats.deliveredOnTime, stats.delivered], [1, 2]);
   assert.equal(stats.cancelled, 1);
 });
+
+test("fulfilment filter splits orders by whether every unit has shipped", async () => {
+  process.env.DASHBOARD_DEMO_MODE = "true";
+  const { getOrders } = await import("./dashboard");
+  const sent = (order: { items: { quantity: number; shippedQuantity: number }[] }) => order.items.every((item) => item.shippedQuantity >= item.quantity);
+  const fulfilled = (await getOrders({ search: "", fulfilment: "fulfilled", includeNoShipping: true })).orders;
+  const unfulfilled = (await getOrders({ search: "", fulfilment: "unfulfilled", includeNoShipping: true })).orders;
+  assert.ok(fulfilled.length && unfulfilled.length);
+  assert.ok(fulfilled.every(sent));
+  assert.ok(unfulfilled.every((order) => !sent(order) && order.status !== "cancelled"));
+});

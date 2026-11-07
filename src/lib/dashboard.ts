@@ -88,6 +88,8 @@ export const ORDERS_PAGE_SIZE = 50;
 export type OrderFilters = {
   search: string;
   status?: FulfillmentStatus;
+  /** Fulfilled: every unit sent. Unfulfilled: some unit still to send (cancelled orders excluded). */
+  fulfilment?: "fulfilled" | "unfulfilled";
   storeId?: string;
   /** Include orders with nothing to ship (hidden by default). */
   includeNoShipping?: boolean;
@@ -112,7 +114,7 @@ export const orderStatuses: FulfillmentStatus[] = ["placed", "processing", "in_t
 // ponytail: days are UTC, so UK summer time shifts the boundary by an hour; use the shop's timezone if that matters.
 export const parseDay = (value?: string) => (value && /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(value)) ? value : undefined);
 
-export type OrderParams = { q?: string; status?: string; store?: string; noShipping?: string; from?: string; to?: string; cause?: string; cost?: string; carrier?: string; sku?: string; country?: string; stage?: string };
+export type OrderParams = { q?: string; status?: string; fulfilment?: string; store?: string; noShipping?: string; from?: string; to?: string; cause?: string; cost?: string; carrier?: string; sku?: string; country?: string; stage?: string };
 
 const text = (value?: string) => value?.trim().slice(0, 200) || undefined;
 
@@ -133,6 +135,7 @@ export function drillDowns(params: OrderParams) {
 export function parseOrderParams(params: OrderParams, stores: { id: string }[]) {
   const query = params.q?.trim() ?? "";
   const status = orderStatuses.find((candidate) => candidate === params.status);
+  const fulfilment = params.fulfilment === "fulfilled" || params.fulfilment === "unfulfilled" ? params.fulfilment : undefined;
   const storeId = stores.find((store) => store.id === params.store)?.id;
   const noShipping = params.noShipping === "1";
   const from = parseDay(params.from);
@@ -140,10 +143,11 @@ export function parseOrderParams(params: OrderParams, stores: { id: string }[]) 
   const drill = drillDowns(params);
   const drillValue = (key: string) => drill.find((filter) => filter.key === key)?.value;
   return {
-    query, status, storeId, noShipping, from, to, drill,
+    query, status, fulfilment, storeId, noShipping, from, to, drill,
     filters: {
       search: query,
       status,
+      fulfilment,
       storeId,
       // "Completed" only exists for no-shipping orders, so choosing it implies showing them.
       includeNoShipping: noShipping || status === "completed",
@@ -156,24 +160,31 @@ export function parseOrderParams(params: OrderParams, stores: { id: string }[]) 
       country: drillValue("country"),
       notDispatched: drillValue("stage") === "not_dispatched",
     } satisfies OrderFilters,
-    search: new URLSearchParams({ ...(query && { q: query }), ...(status && { status }), ...(storeId && { store: storeId }), ...(noShipping && { noShipping: "1" }), ...(from && { from }), ...(to && { to }), ...Object.fromEntries(drill.map((filter) => [filter.key, filter.value])) }),
+    search: new URLSearchParams({ ...(query && { q: query }), ...(status && { status }), ...(fulfilment && { fulfilment }), ...(storeId && { store: storeId }), ...(noShipping && { noShipping: "1" }), ...(from && { from }), ...(to && { to }), ...Object.fromEntries(drill.map((filter) => [filter.key, filter.value])) }),
   };
 }
 
-function demoMatches({ search, status, storeId, includeNoShipping, from, before }: OrderFilters) {
+const isFulfilled = (order: { items: { quantity: number; shippedQuantity: number }[] }) => order.items.length > 0 && order.items.every((item) => item.shippedQuantity >= item.quantity);
+
+function demoMatches({ search, status, fulfilment, storeId, includeNoShipping, from, before }: OrderFilters) {
   const query = search.trim().toLowerCase();
   return demoOrders.filter((order) => {
     const matchesSearch = !query || [
       order.shopifyOrderId, order.customerName, order.customerEmail, order.factoryName, order.carrier,
     ].some((value) => value.toLowerCase().includes(query));
-    return matchesSearch && (!status || order.status === status) && !storeId && (includeNoShipping || order.requiresShipping) && (!from || order.orderDate >= from) && (!before || order.orderDate < before);
+    return matchesSearch && (!status || order.status === status) && (!fulfilment || (fulfilment === "fulfilled" ? isFulfilled(order) : order.status !== "cancelled" && !isFulfilled(order))) && !storeId && (includeNoShipping || order.requiresShipping) && (!from || order.orderDate >= from) && (!before || order.orderDate < before);
   });
 }
 
-function orderWhere({ search, status, storeId, includeNoShipping, from, before, cause, cost, carrier, sku, country, notDispatched }: OrderFilters): Prisma.OrderWhereInput {
+function orderWhere({ search, status, fulfilment, storeId, includeNoShipping, from, before, cause, cost, carrier, sku, country, notDispatched }: OrderFilters): Prisma.OrderWhereInput {
   const query = search.trim();
   return {
     ...(status ? { status } : {}),
+    ...(fulfilment && (() => {
+      const unsent = { items: { some: { shippedQuantity: { lt: getPrisma().orderItem.fields.quantity } } } };
+      // AND keeps these off the `items`/`status` keys the sku and status filters set.
+      return { AND: fulfilment === "fulfilled" ? [{ items: { some: {} } }, { NOT: unsent }] : [unsent, { NOT: { status: "cancelled" as const } }] };
+    })()),
     ...(storeId ? { storeId } : {}),
     ...(includeNoShipping ? {} : { requiresShipping: true }),
     ...(from || before ? { orderDate: { ...(from && { gte: from }), ...(before && { lt: before }) } } : {}),

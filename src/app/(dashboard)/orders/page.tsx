@@ -15,10 +15,10 @@ export default async function OrdersPage({ searchParams }: { searchParams: Promi
   const params = await searchParams;
   const page = Math.max(1, Math.floor(Number(params.page)) || 1);
   const stores = await getStoreOptions();
-  const { query, status, storeId, noShipping, from, to, drill, filters, search } = parseOrderParams(params, stores);
+  const { query, status, fulfilment, storeId, noShipping, from, to, drill, filters, search } = parseOrderParams(params, stores);
   const { includeNoShipping } = filters;
   const [{ orders, total }, stats] = await Promise.all([getOrders({ ...filters, page }), getOrderStats(filters)]);
-  const hasFilters = Boolean(query || status || storeId || includeNoShipping || from || to || drill.length);
+  const hasFilters = Boolean(query || status || fulfilment || storeId || includeNoShipping || from || to || drill.length);
   const without = (key: string) => {
     const rest = new URLSearchParams(search);
     rest.delete(key);
@@ -58,6 +58,11 @@ export default async function OrdersPage({ searchParams }: { searchParams: Promi
           <option value="">All statuses</option>
           {orderStatuses.map((item) => <option key={item} value={item}>{item === "in_transit" ? "In transit" : item.charAt(0).toUpperCase() + item.slice(1)}</option>)}
         </select>
+        <select className="filter-select" name="fulfilment" defaultValue={fulfilment ?? ""} aria-label="Filter by fulfilled or unfulfilled">
+          <option value="">Fulfillment</option>
+          <option value="fulfilled">Fulfilled</option>
+          <option value="unfulfilled">Unfulfilled</option>
+        </select>
         {stores.length > 0 && (
           <select className="filter-select" name="store" defaultValue={storeId ?? ""} aria-label="Filter by store">
             <option value="">All stores</option>
@@ -65,7 +70,6 @@ export default async function OrdersPage({ searchParams }: { searchParams: Promi
           </select>
         )}
         <div className="date-range" role="group" aria-label="Order date">
-          <Calendar size={13} />
           <input name="from" type="date" defaultValue={from} max={to} aria-label="Ordered from" />
           <span aria-hidden="true">–</span>
           <input name="to" type="date" defaultValue={to} min={from} aria-label="Ordered to" />
