@@ -39,11 +39,11 @@ export default async function InventoryPage({ searchParams }: { searchParams: Pr
       <div className="page-heading"><div><p className="eyebrow">Stock</p><h1>Inventory</h1><p className="page-subtitle">Sellable stock per SKU in each store, from Shopify. Refreshed with every order sync.</p></div>
         <div className="heading-controls"><span className="results-count">{rows.size.toLocaleString("en-GB")} {rows.size === 1 ? "SKU" : "SKUs"}</span></div>
       </div>
-      <Form className="filter-bar" action="/inventory" key={query}>
-        <label className="search-field"><Search size={14} /><input name="q" type="search" placeholder="Search SKU or product name" defaultValue={query} aria-label="Search inventory" /></label>
-        <button className="search-button filter-apply" type="submit">Search</button>
-      </Form>
       <section className="panel table-panel">
+        <Form className="filter-bar" action="/inventory" key={query}>
+          <label className="search-field"><Search size={14} /><input name="q" type="search" placeholder="Search SKU or product name" defaultValue={query} aria-label="Search inventory" /></label>
+          <button className="search-button filter-apply" type="submit">Search</button>
+        </Form>
         {rows.size ? (
           <div className="table-scroll">
             <table className="data-table">
