@@ -121,10 +121,10 @@ test("money, cancellation, chargebacks and replacement detection", () => {
   assert.equal(cancelled.isReplacement, false);
 });
 
-test("inventory merges variants by case-insensitive SKU and skips SKU-less ones", () => {
-  const variant = (sku: string | null, inventoryQuantity: number | null, title = "No. 006") => ({ sku, inventoryQuantity, product: { title } });
-  assert.deepEqual(mapInventory([variant(" 006w05", 30), variant("006W05", 4, "Other"), variant(null, 9), variant("", 9), variant("021M05", null)]), [
-    { sku: "006W05", productName: "No. 006", quantity: 34 },
-    { sku: "021M05", productName: "No. 006", quantity: 0 },
+test("inventory merges variants by case-insensitive SKU (active if any is) and skips SKU-less ones", () => {
+  const variant = (sku: string | null, inventoryQuantity: number | null, status = "DRAFT") => ({ sku, inventoryQuantity, product: { status } });
+  assert.deepEqual(mapInventory([variant(" 006w05", 30), variant("006W05", 4, "ACTIVE"), variant(null, 9), variant("", 9), variant("021M05", null)]), [
+    { sku: "006W05", quantity: 34, active: true },
+    { sku: "021M05", quantity: 0, active: false },
   ]);
 });

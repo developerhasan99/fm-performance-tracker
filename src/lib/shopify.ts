@@ -359,21 +359,22 @@ async function saveOrder(store: ShopifyStore, token: string, shopifyOrder: Shopi
 const INVENTORY_QUERY = `query Inventory($cursor: String) {
   productVariants(first: 250, after: $cursor) {
     pageInfo { hasNextPage endCursor }
-    nodes { sku inventoryQuantity product { title } }
+    nodes { sku inventoryQuantity product { status } }
   }
 }`;
 
-export type ShopifyVariant = { sku: string | null; inventoryQuantity: number | null; product: { title: string } };
+export type ShopifyVariant = { sku: string | null; inventoryQuantity: number | null; product: { status: string } };
 type InventoryPage = { productVariants: { pageInfo: { hasNextPage: boolean; endCursor: string | null }; nodes: ShopifyVariant[] } };
 
 /** One row per SKU (case-insensitive); variants sharing a SKU are added up. Variants without a SKU are skipped. */
 export function mapInventory(variants: ShopifyVariant[]) {
-  const bySku = new Map<string, { sku: string; productName: string; quantity: number }>();
+  const bySku = new Map<string, { sku: string; quantity: number; active: boolean }>();
   for (const variant of variants) {
     const sku = variant.sku?.trim().toUpperCase();
     if (!sku) continue;
-    const row = bySku.get(sku) ?? { sku, productName: variant.product.title, quantity: 0 };
+    const row = bySku.get(sku) ?? { sku, quantity: 0, active: false };
     row.quantity += variant.inventoryQuantity ?? 0;
+    row.active ||= variant.product.status === "ACTIVE";
     bySku.set(sku, row);
   }
   return [...bySku.values()];

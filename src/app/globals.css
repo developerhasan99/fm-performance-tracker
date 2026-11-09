@@ -191,6 +191,7 @@ button:disabled{opacity:.6;cursor:default}
 .panel-pad{padding:0 18px 18px}
 .numeric-table td:not(:first-child),.numeric-table th:not(:first-child){text-align:right;font-variant-numeric:tabular-nums}
 .data-table .numeric{text-align:right;font-variant-numeric:tabular-nums}
+.inventory-table th:first-child,.inventory-table td:first-child{width:1%}.inventory-table .inactive-stock{color:#b3bab6}
 .overdue{color:var(--red);font-weight:600}
 @media(max-width:760px){.fact-list{grid-template-columns:1fr}}
 .content>.panel{margin-bottom:15px}

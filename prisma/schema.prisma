@@ -237,17 +237,19 @@ model ShopifyStore {
 
 // Stock of one SKU in one store (sum of its variants' sellable quantity across locations). Replaced on every sync.
 model InventoryLevel {
-  id          String       @id @default(cuid())
-  storeId     String
-  store       ShopifyStore @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  id       String       @id @default(cuid())
+  storeId  String
+  store    ShopifyStore @relation(fields: [storeId], references: [id], onDelete: Cascade)
   // Upper-cased, trimmed: the same product has the same SKU in every store.
-  sku         String
-  productName String
-  quantity    Int
-  syncedAt    DateTime
+  sku      String
+  quantity Int
+  // A variant with this SKU belongs to a product with status ACTIVE in this store.
+  active   Boolean
+  syncedAt DateTime
 
   @@unique([storeId, sku])
   @@index([sku])
+  @@index([active, sku])
 }
 
 // A Commslayer workspace connected with an integration token (conversations:read).
