@@ -5,17 +5,17 @@ import { redirect } from "next/navigation";
 import { ChevronLeft, ChevronRight, Download, Search } from "lucide-react";
 import { isDemoMode, requireUser } from "@/lib/auth";
 import { ORDERS_PAGE_SIZE as PAGE_SIZE, formatDate } from "@/lib/dashboard";
-import { getInventory } from "@/lib/inventory";
+import { getInventory, type InventoryParams } from "@/lib/inventory";
 
 export const metadata: Metadata = { title: "Inventory" };
 export const dynamic = "force-dynamic";
 
-export default async function InventoryPage({ searchParams }: { searchParams: Promise<{ q?: string; status?: string; page?: string }> }) {
+export default async function InventoryPage({ searchParams }: { searchParams: Promise<InventoryParams & { page?: string }> }) {
   if (isDemoMode()) redirect("/");
   await requireUser();
   const params = await searchParams;
   const page = Math.max(1, Math.floor(Number(params.page)) || 1);
-  const { query, status, search, stores, rows, total, anySynced, syncedAt } = await getInventory(params, { number: page, size: PAGE_SIZE });
+  const { query, status, stock, search, stores, rows, total, anySynced, syncedAt } = await getInventory(params, { number: page, size: PAGE_SIZE });
   const updated = (date?: Date) => (date ? formatDate(date, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "Not synced");
 
   const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
@@ -41,6 +41,12 @@ export default async function InventoryPage({ searchParams }: { searchParams: Pr
             <option value="any">Active in at least one store</option>
             <option value="all">All products</option>
           </select>
+          <select className="filter-select" name="stock" defaultValue={stock ?? ""} aria-label="Filter by stock">
+            <option value="">All stock levels</option>
+            <option value="in">In stock in all stores</option>
+            <option value="some">Out of stock in some stores</option>
+            <option value="out">Out of stock in all stores</option>
+          </select>
           <button className="search-button filter-apply" type="submit">Apply</button>
         </Form>
         {total ? (
@@ -54,7 +60,7 @@ export default async function InventoryPage({ searchParams }: { searchParams: Pr
                 </tr>
               </thead>
               <tbody>
-                {[...rows].map(([sku, row]) => (
+                {rows.map(([sku, row]) => (
                   <tr key={sku}>
                     <td className="customer-cell">{sku}</td>
                     {stores.map((store) => {
@@ -71,7 +77,7 @@ export default async function InventoryPage({ searchParams }: { searchParams: Pr
       </section>
       {total > PAGE_SIZE && (
         <nav className="pagination" aria-label="Inventory pages">
-          <span>{first}–{first + rows.size - 1} of {total}</span>
+          <span>{first}–{first + rows.length - 1} of {total}</span>
           {page > 1 ? <Link className="secondary-button" href={pageHref(page - 1)}><ChevronLeft size={12} />Previous</Link> : <span className="secondary-button" aria-disabled="true"><ChevronLeft size={12} />Previous</span>}
           <span>Page {page} of {pageCount}</span>
           {page < pageCount ? <Link className="secondary-button" href={pageHref(page + 1)}>Next<ChevronRight size={12} /></Link> : <span className="secondary-button" aria-disabled="true">Next<ChevronRight size={12} /></span>}
