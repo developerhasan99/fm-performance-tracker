@@ -8,7 +8,8 @@ import { linkTickets } from "@/lib/support-matching";
 
 export const SHOPIFY_API_VERSION = "2026-10";
 // read_orders only reaches the last 60 days; older orders need read_all_orders, which Shopify must approve.
-export const SHOPIFY_SCOPES = "read_orders";
+// read_products + read_inventory: stock per SKU for the Inventory page.
+export const SHOPIFY_SCOPES = "read_orders,read_products,read_inventory";
 const DAY = 24 * 60 * 60 * 1000;
 
 /** "Acme", "acme.myshopify.com" or "https://acme.myshopify.com/admin" → "acme.myshopify.com", or null if invalid. */
@@ -353,6 +354,54 @@ async function saveOrder(store: ShopifyStore, token: string, shopifyOrder: Shopi
   });
 }
 
+// ---- Inventory ------------------------------------------------------------------------
+
+const INVENTORY_QUERY = `query Inventory($cursor: String) {
+  productVariants(first: 250, after: $cursor) {
+    pageInfo { hasNextPage endCursor }
+    nodes { sku inventoryQuantity product { title } }
+  }
+}`;
+
+export type ShopifyVariant = { sku: string | null; inventoryQuantity: number | null; product: { title: string } };
+type InventoryPage = { productVariants: { pageInfo: { hasNextPage: boolean; endCursor: string | null }; nodes: ShopifyVariant[] } };
+
+/** One row per SKU (case-insensitive); variants sharing a SKU are added up. Variants without a SKU are skipped. */
+export function mapInventory(variants: ShopifyVariant[]) {
+  const bySku = new Map<string, { sku: string; productName: string; quantity: number }>();
+  for (const variant of variants) {
+    const sku = variant.sku?.trim().toUpperCase();
+    if (!sku) continue;
+    const row = bySku.get(sku) ?? { sku, productName: variant.product.title, quantity: 0 };
+    row.quantity += variant.inventoryQuantity ?? 0;
+    bySku.set(sku, row);
+  }
+  return [...bySku.values()];
+}
+
+async function syncInventory(store: ShopifyStore, token: string) {
+  const variants: ShopifyVariant[] = [];
+  let cursor: string | null = null;
+  try {
+    do {
+      const page: InventoryPage = await adminGraphql<InventoryPage>(store.shopDomain, token, INVENTORY_QUERY, { cursor });
+      variants.push(...page.productVariants.nodes);
+      cursor = page.productVariants.pageInfo.hasNextPage ? page.productVariants.pageInfo.endCursor : null;
+    } while (cursor);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    // Stores connected before inventory existed lack the scopes until they are reconnected.
+    throw new Error(/access denied|scope/i.test(message) ? "Inventory needs the read_products and read_inventory scopes: add them to the app version, then click Reconnect." : `Inventory: ${message}`);
+  }
+  const syncedAt = new Date();
+  const rows = mapInventory(variants).map((row) => ({ ...row, storeId: store.id, syncedAt }));
+  // Replace the store's stock in one go, so deleted products disappear too.
+  await getPrisma().$transaction([
+    getPrisma().inventoryLevel.deleteMany({ where: { storeId: store.id } }),
+    getPrisma().inventoryLevel.createMany({ data: rows }),
+  ]);
+}
+
 // Shared across module copies in one process so the scheduler and "Sync now" don't overlap on a store.
 // Also the live progress shown on the Stores page.
 type SyncProgress = { startedAt: Date; imported: number };
@@ -386,6 +435,8 @@ export async function syncStore(storeId: string) {
     // New orders may be what waiting support tickets refer to.
     await linkTickets();
     await recomputeFailures(storeId);
+    // Last, so a store missing the inventory scopes still gets its orders.
+    await syncInventory(store, token);
     return { imported, skipped: false };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

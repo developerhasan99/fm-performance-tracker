@@ -205,10 +205,10 @@ model Session {
 }
 
 model ShopifyStore {
-  id                   String          @id @default(cuid())
+  id                   String           @id @default(cuid())
   name                 String
   // Permanent store address, e.g. "acme.myshopify.com". Used for all API calls.
-  shopDomain           String          @unique
+  shopDomain           String           @unique
   // Public storefront domain, e.g. "acme.com". Display only.
   customDomain         String?
   // Credentials of the store's custom-distribution app (Shopify Dev Dashboard). Secrets are encrypted.
@@ -219,19 +219,35 @@ model ShopifyStore {
   refreshToken         String?
   // Orders created before this are never imported. Null = everything Shopify allows (last 60 days).
   importOrdersFrom     DateTime?
-  dispatchSlaDays      Int             @default(2)
-  deliverySlaDays      Int             @default(5)
+  dispatchSlaDays      Int              @default(2)
+  deliverySlaDays      Int              @default(5)
   // Cost-of-failure assumptions, EUR cents: one reshipment (product + postage) and the fee per chargeback.
-  reshipCostCents      Int             @default(1000)
-  chargebackFeeCents   Int             @default(1500)
+  reshipCostCents      Int              @default(1000)
+  chargebackFeeCents   Int              @default(1500)
   // Orders updated after this moment are fetched on the next sync.
   lastSyncedAt         DateTime?
   lastSyncError        String?
   orders               Order[]
   tickets              SupportTicket[]
   inboxes              SupportInbox[]
-  createdAt            DateTime        @default(now())
-  updatedAt            DateTime        @updatedAt
+  inventory            InventoryLevel[]
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+}
+
+// Stock of one SKU in one store (sum of its variants' sellable quantity across locations). Replaced on every sync.
+model InventoryLevel {
+  id          String       @id @default(cuid())
+  storeId     String
+  store       ShopifyStore @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  // Upper-cased, trimmed: the same product has the same SKU in every store.
+  sku         String
+  productName String
+  quantity    Int
+  syncedAt    DateTime
+
+  @@unique([storeId, sku])
+  @@index([sku])
 }
 
 // A Commslayer workspace connected with an integration token (conversations:read).

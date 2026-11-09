@@ -190,6 +190,7 @@ button:disabled{opacity:.6;cursor:default}
 .panel-note{margin:12px 0 0;border-radius:5px;background:var(--amber-soft);color:#7c623c;padding:8px 10px;font-size:10px;line-height:1.5}
 .panel-pad{padding:0 18px 18px}
 .numeric-table td:not(:first-child),.numeric-table th:not(:first-child){text-align:right;font-variant-numeric:tabular-nums}
+.data-table .numeric{text-align:right;font-variant-numeric:tabular-nums}
 .overdue{color:var(--red);font-weight:600}
 @media(max-width:760px){.fact-list{grid-template-columns:1fr}}
 .content>.panel{margin-bottom:15px}

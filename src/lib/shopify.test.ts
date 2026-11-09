@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { createHmac } from "node:crypto";
 import { test } from "node:test";
-import { addWorkingDays, carrierFromShippingLine, isValidCallbackHmac, mapRefunds, mapShopifyOrder, normalizeShopDomain, type ShopifyOrder } from "./shopify";
+import { addWorkingDays, carrierFromShippingLine, isValidCallbackHmac, mapInventory, mapRefunds, mapShopifyOrder, normalizeShopDomain, type ShopifyOrder } from "./shopify";
 
 test("shop domain normalization rejects look-alikes", () => {
   assert.equal(normalizeShopDomain("Acme"), "acme.myshopify.com");
@@ -119,4 +119,12 @@ test("money, cancellation, chargebacks and replacement detection", () => {
   const cancelled = mapShopifyOrder({ ...base, cancelledAt: "2026-10-02T00:00:00Z", cancelReason: "CUSTOMER", totalPriceSet: { shopMoney: { amount: "0.00" } } }, sla).order;
   assert.equal(cancelled.cancelReason, "CUSTOMER");
   assert.equal(cancelled.isReplacement, false);
+});
+
+test("inventory merges variants by case-insensitive SKU and skips SKU-less ones", () => {
+  const variant = (sku: string | null, inventoryQuantity: number | null, title = "No. 006") => ({ sku, inventoryQuantity, product: { title } });
+  assert.deepEqual(mapInventory([variant(" 006w05", 30), variant("006W05", 4, "Other"), variant(null, 9), variant("", 9), variant("021M05", null)]), [
+    { sku: "006W05", productName: "No. 006", quantity: 34 },
+    { sku: "021M05", productName: "No. 006", quantity: 0 },
+  ]);
 });

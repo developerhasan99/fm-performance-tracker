@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Form from "next/form";
 import Link from "next/link";
-import { Boxes, Calendar, CheckCircle2, ChevronLeft, ChevronRight, Download, Euro, PackageX, Search, X } from "lucide-react";
+import { Boxes, CheckCircle2, ChevronLeft, ChevronRight, Download, Euro, PackageX, Search, X } from "lucide-react";
 import { MetricCard } from "@/components/metrics";
 import { OrdersTable } from "@/components/orders-table";
 import { ORDERS_PAGE_SIZE, formatEuro, getOrderStats, getOrders, getStoreOptions, orderStatuses, parseOrderParams, type OrderParams } from "@/lib/dashboard";

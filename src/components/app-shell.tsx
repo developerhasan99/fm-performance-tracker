@@ -1,6 +1,6 @@
 "use client";
 
-import { ClipboardList, Headset, LayoutDashboard, LifeBuoy, LogOut, PackageCheck, ReceiptText, Store, Users } from "lucide-react";
+import { Boxes, ClipboardList, Headset, LayoutDashboard, LifeBuoy, LogOut, PackageCheck, ReceiptText, Store, Users } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Suspense, type ReactNode } from "react";
@@ -17,6 +17,7 @@ const navigationGroups = [
       { href: "/orders", label: "Orders", icon: ClipboardList, needsDatabase: false },
       { href: "/orders/refunds", label: "Refunds", icon: ReceiptText, needsDatabase: true },
       { href: "/tickets", label: "Tickets", icon: LifeBuoy, needsDatabase: true },
+      { href: "/inventory", label: "Inventory", icon: Boxes, needsDatabase: true },
     ],
   },
   {
