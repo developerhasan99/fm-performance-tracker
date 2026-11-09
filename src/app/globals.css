@@ -192,6 +192,7 @@ button:disabled{opacity:.6;cursor:default}
 .numeric-table td:not(:first-child),.numeric-table th:not(:first-child){text-align:right;font-variant-numeric:tabular-nums}
 .data-table .numeric{text-align:right;font-variant-numeric:tabular-nums}
 .inventory-table th:first-child,.inventory-table td:first-child{width:1%}.inventory-table .inactive-stock{color:#b3bab6}
+.inventory-table th{color:var(--ink);font-size:11px;letter-spacing:0}.inventory-table .th-note{display:block;margin-top:3px;color:#8d9792;font-size:10px;font-weight:400}
 .overdue{color:var(--red);font-weight:600}
 @media(max-width:760px){.fact-list{grid-template-columns:1fr}}
 .content>.panel{margin-bottom:15px}
